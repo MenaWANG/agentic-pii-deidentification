@@ -1,0 +1,15 @@
+# This file will hold deployment configurations for different environments
+# (e.g., development, staging, production) as outlined in the project plan.
+
+development:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  # Potentially add other settings like API keys from env vars
+
+staging:
+  provider: "databricks"
+  model: "llama-2-70b"
+
+production:
+  provider: "databricks"
+  model: "mixtral-8x7b" 
