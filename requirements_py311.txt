@@ -1,0 +1,26 @@
+# Core Presidio dependencies
+presidio-analyzer==2.2.33
+presidio-anonymizer==2.2.33
+
+# Supporting dependencies
+spacy>=3.4.0
+pandas>=1.5.0
+numpy>=1.21.0
+
+# For better performance and additional recognizers
+python-dateutil>=2.8.0
+phonenumbers>=8.12.0
+
+# For testing and development
+pytest>=7.0.0
+jupyter>=1.0.0
+
+# For visualization and demo
+seaborn>=0.13.0
+
+# MLflow for experiment tracking 
+mlflow>=2.0.0
+
+# LangChain dependencies (for agentic implementation)
+langchain>=0.1.0
+langchain-experimental>=0.0.50 

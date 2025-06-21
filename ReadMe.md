@@ -192,7 +192,7 @@ mlflow.log_metrics({
    - Presidio installation and testing
 
 2. **Baseline Implementation**
-   - Presidio via LangChain integration
+   - Microsoft Presidio implementation
    - Australian localization patterns
    - MLflow experiment tracking setup
 
