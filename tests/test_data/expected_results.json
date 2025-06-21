@@ -1,0 +1,54 @@
+{
+  "test_001": {
+    "expected_pii_count": 8,
+    "expected_pii_items": [
+      {
+        "type": "consultant_first_name",
+        "value": "Ava",
+        "expected_positions": [[12, 15]]
+      },
+      {
+        "type": "member_mobile",
+        "value": "041648 996 374",
+        "expected_positions": [[94, 108]]
+      },
+      {
+        "type": "member_email",
+        "value": "ella.wilson@example.com",
+        "expected_positions": [[159, 182]]
+      },
+      {
+        "type": "member_number",
+        "value": "95924617",
+        "expected_positions": [[252, 260]]
+      },
+      {
+        "type": "member_address",
+        "value": "34 Church Street, Adelaide SA 5000",
+        "expected_positions": [[332, 366]]
+      },
+      {
+        "type": "member_full_name",
+        "value": "Ella Michael Wilson",
+        "expected_positions": [[427, 446]]
+      },
+      {
+        "type": "member_first_name",
+        "value": "Ella",
+        "expected_positions": [[427, 431], [480, 484]]
+      }
+    ],
+    "word_boundary_tests": {
+      "ella_should_exclude_email": {
+        "description": "Ella should not be found inside ella.wilson@example.com",
+        "expected_positions_count": 2,
+        "excluded_positions": [[159, 163]]
+      },
+      "wilson_should_exclude_email": {
+        "description": "Wilson should not be found inside ella.wilson@example.com",
+        "expected_positions_count": 1,
+        "excluded_positions": [[164, 170]]
+      }
+    }
+  }
+} 

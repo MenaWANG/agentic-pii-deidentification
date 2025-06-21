@@ -182,7 +182,7 @@ class PurePresidioFramework:
             # Save results
             if output_path:
                 results_df.to_csv(output_path, index=False)
-                print(f"💾 Results saved to {output_path}")
+                # print(f"💾 Results saved to {output_path}")
             
             if self.enable_mlflow:
                 self._log_mlflow_metrics(final_metrics, results_df)
@@ -210,13 +210,33 @@ class PurePresidioFramework:
             self.stats['pii_types'][entity_type] += 1
     
     def _calculate_final_metrics(self, results_df: pd.DataFrame, total_time: float) -> Dict:
-        """Calculate final processing metrics."""
+        """Calculate final processing metrics with detailed timing information."""
+        num_transcripts = len(results_df)
+        avg_time_per_transcript = total_time / num_transcripts if num_transcripts > 0 else 0
+        
+        # Calculate 1M transcript processing estimates
+        time_for_1m_seconds = avg_time_per_transcript * 1_000_000
+        time_for_1m_minutes = time_for_1m_seconds / 60
+        time_for_1m_hours = time_for_1m_minutes / 60
+        time_for_1m_days = time_for_1m_hours / 24
+        
+        # Format time estimate for 1M transcripts
+        if time_for_1m_days >= 1:
+            time_1m_estimate = f"{time_for_1m_days:.2f} days"
+        elif time_for_1m_hours >= 1:
+            time_1m_estimate = f"{time_for_1m_hours:.2f} hours"
+        elif time_for_1m_minutes >= 1:
+            time_1m_estimate = f"{time_for_1m_minutes:.2f} minutes"
+        else:
+            time_1m_estimate = f"{time_for_1m_seconds:.4f} seconds"
+        
         return {
-            'total_transcripts': len(results_df),
+            'total_transcripts': num_transcripts,
             'total_pii_detected': results_df['pii_count'].sum(),
-            'avg_pii_per_transcript': results_df['pii_count'].mean(),
-            'total_processing_time': total_time,
-            'avg_processing_time_per_transcript': total_time / len(results_df),
+            'avg_pii_per_transcript': round(results_df['pii_count'].mean(), 2),
+            'total_processing_time_seconds': round(total_time, 4),
+            'avg_processing_time_per_transcript_seconds': round(avg_time_per_transcript, 4),
+            'estimated_time_for_1m_transcripts': time_1m_estimate,
             'pii_types_distribution': dict(self.stats['pii_types'])
         }
     
@@ -231,8 +251,8 @@ class PurePresidioFramework:
                 'total_transcripts': metrics['total_transcripts'],
                 'total_pii_detected': metrics['total_pii_detected'],
                 'avg_pii_per_transcript': metrics['avg_pii_per_transcript'],
-                'total_processing_time': metrics['total_processing_time'],
-                'avg_processing_time_per_transcript': metrics['avg_processing_time_per_transcript']
+                'total_processing_time_seconds': metrics['total_processing_time_seconds'],
+                'avg_processing_time_per_transcript_seconds': metrics['avg_processing_time_per_transcript_seconds']
             })
             
             # Log PII types distribution as JSON
@@ -272,7 +292,7 @@ def test_presidio_installation():
         print(f"   Original text length: {len(test_text)}")
         print(f"   Anonymized text length: {len(result['anonymized_text'])}")
         print(f"   PII detections: {result['pii_count']}")
-        print(f"   Processing time: {result['processing_time']:.3f}s")
+        print(f"   Processing time: {result['processing_time']:.4f} seconds")
         print(f"\n📝 Sample anonymized text:\n{result['anonymized_text'][:200]}...")
         
         return True

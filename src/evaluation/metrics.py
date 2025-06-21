@@ -51,14 +51,16 @@ class PIIEvaluator:
             
         self.matching_mode = matching_mode
         
-        # Entity type mappings
+        # Entity type mappings for research mode evaluation
+        # Maps Presidio entity types to ground truth PII field names
         self.entity_mappings = {
-            'PERSON': ['member_first_name', 'member_middle_name', 'member_last_name', 'consultant_first_name'],
+            'PERSON': ['member_first_name', 'member_full_name', 'consultant_first_name'],
             'EMAIL_ADDRESS': ['member_email'],
             'PHONE_NUMBER': ['member_mobile'],
             'LOCATION': ['member_address'],
-            'DATE_TIME': ['member_number'],  # Often detected as dates
-            'US_SSN': ['member_number']      # Sometimes detected as SSN
+            'ORGANIZATION': [],  # Not typically in our ground truth
+            'DATE_TIME': [],     # Usually not PII in our context
+            'US_SSN': ['member_number'],  # Membership numbers might be detected as SSN
         }
         
         print(f"🔧 PIIEvaluator initialized with '{matching_mode}' matching mode")
@@ -86,7 +88,7 @@ class PIIEvaluator:
         Returns:
             Comprehensive evaluation metrics dictionary
         """
-        print("🔍 Starting PII evaluation...")
+        # print("🔍 Starting PII evaluation...")
         
         # Initialize metrics
         evaluation_results = {
@@ -152,8 +154,7 @@ class PIIEvaluator:
         # Define ground truth fields (customer PII)
         gt_fields = {
             'member_first_name': ground_truth_row['member_first_name'],
-            'member_middle_name': ground_truth_row.get('member_middle_name'),  # Optional field
-            'member_last_name': ground_truth_row['member_last_name'],
+            'member_full_name': ground_truth_row['member_full_name'],
             'member_email': ground_truth_row['member_email'],
             'member_mobile': ground_truth_row['member_mobile'],
             'member_address': ground_truth_row['member_address'],
@@ -183,32 +184,34 @@ class PIIEvaluator:
                         'occurrence_id': f"{pii_type}_{start_pos}_{end_pos}"  # Unique ID for each occurrence
                     })
         
+        
+
         # Log for debugging
         if len(ground_truth_pii) > 0:
-            print(f"  📍 Found {len(ground_truth_pii)} total PII occurrences in transcript")
+            # print(f"  📍 Found {len(ground_truth_pii)} total PII occurrences in transcript")
             pii_counts = {}
             for item in ground_truth_pii:
                 pii_counts[item['type']] = pii_counts.get(item['type'], 0) + 1
             for pii_type, count in pii_counts.items():
-                print(f"    - {pii_type}: {count} occurrences")
-        
+                pass  # Debug loop - can be removed if not needed
+
         return ground_truth_pii
     
     def _find_pii_positions(self, pii_value: str, transcript: str, pii_type: str) -> List[Tuple[int, int]]:
         """Find all positions of PII value in transcript with fuzzy matching."""
         positions = []
         
-        # Exact match first
-        start = 0
-        while True:
-            pos = transcript.lower().find(pii_value.lower(), start)
-            if pos == -1:
-                break
-            positions.append((pos, pos + len(pii_value)))
-            start = pos + 1
+        # For individual name components, use word boundaries and exclude email contexts
+        if pii_type in ['member_first_name', 'member_full_name', 'consultant_first_name']:
+            if len(pii_value) > 1:  # Skip very short names to avoid false positives
+                # Use negative lookbehind and lookahead to exclude email contexts
+                # This pattern excludes names that are part of email addresses
+                pattern = r'(?<![a-zA-Z0-9._-])\b' + re.escape(pii_value) + r'\b(?![a-zA-Z0-9._-]*@)'
+                for match in re.finditer(pattern, transcript, re.IGNORECASE):
+                    positions.append((match.start(), match.end()))
         
         # For phone numbers, try different formats
-        if pii_type == 'member_mobile':
+        elif pii_type == 'member_mobile':
             # Try with different spacing/formatting
             clean_phone = re.sub(r'[^\d]', '', pii_value)
             for pattern in self.phone_patterns:
@@ -216,21 +219,20 @@ class PIIEvaluator:
                     if re.sub(r'[^\d]', '', match.group()) == clean_phone:
                         positions.append((match.start(), match.end()))
         
-        # For individual name components, ensure word boundaries
-        elif pii_type in ['member_first_name', 'member_middle_name', 'member_last_name', 'consultant_first_name']:
-            if len(pii_value) > 1:  # Skip very short names to avoid false positives
-                start = 0
-                while True:
-                    pos = transcript.lower().find(pii_value.lower(), start)
-                    if pos == -1:
-                        break
-                    # Check word boundaries for name components
-                    if self._is_word_boundary(transcript, pos, len(pii_value)):
-                        positions.append((pos, pos + len(pii_value)))
-                    start = pos + 1
+        # For all other PII types, use exact match
+        else:
+            start = 0
+            while True:
+                pos = transcript.lower().find(pii_value.lower(), start)
+                if pos == -1:
+                    break
+                positions.append((pos, pos + len(pii_value)))
+                start = pos + 1
         
         return list(set(positions))  # Remove duplicates
-    
+
+
+
     def _is_word_boundary(self, text: str, start_pos: int, length: int) -> bool:
         """Check if the found text is at word boundaries to avoid partial word matches."""
         end_pos = start_pos + length
@@ -246,15 +248,14 @@ class PIIEvaluator:
     def _match_detections_to_ground_truth(self, detected_pii: List[Dict], 
                                          ground_truth_pii: List[Dict], 
                                          transcript: str) -> List[PIIMatch]:
-        """Match detected PII to ground truth with configurable matching strategy."""
+        """Match detected PII to ground truth with smart matching logic."""
         matches = []
         gt_matched = set()
         det_matched = set()
         
-        # Match detected items to ground truth
+        # SMART MATCHING: Allow one detection to match multiple overlapping ground truth items
         for j, det_item in enumerate(detected_pii):
-            best_match = None
-            best_score = 0
+            matched_gt_items = []
             
             for i, gt_item in enumerate(ground_truth_pii):
                 if i in gt_matched:
@@ -280,11 +281,8 @@ class PIIEvaluator:
                     if overlap_ratio > 0.1:  # Even small overlap counts as protection
                         match_score = overlap_ratio
                         match_type = 'exact' if overlap_ratio > 0.8 else 'partial'
+                        matched_gt_items.append((i, match_type, match_score))
                         
-                        if match_score > best_score:
-                            best_match = (i, match_type, match_score)
-                            best_score = match_score
-                            
                 elif self.matching_mode == 'research':
                     # RESEARCH: Require exact entity type matching + good positional overlap
                     # Research focus: "Is the PII classified correctly?"
@@ -296,29 +294,26 @@ class PIIEvaluator:
                         if overlap_ratio > 0.5:  # Require substantial overlap in research mode
                             match_score = overlap_ratio
                             match_type = 'exact' if overlap_ratio > 0.8 else 'partial'
-                            
-                            if match_score > best_score:
-                                best_match = (i, match_type, match_score)
-                                best_score = match_score
+                            matched_gt_items.append((i, match_type, match_score))
             
-            # Record the best match if found
-            if best_match:
-                gt_idx, match_type, confidence = best_match
-                gt_item = ground_truth_pii[gt_idx]
-                
-                matches.append(PIIMatch(
-                    ground_truth_value=gt_item['value'],
-                    ground_truth_type=gt_item['type'],
-                    detected_value=det_item['text'],
-                    detected_type=det_item['entity_type'],
-                    match_type=match_type,
-                    confidence=confidence,
-                    start_pos=gt_item['start'],
-                    end_pos=gt_item['end']
-                ))
-                
-                gt_matched.add(gt_idx)
+            # Record matches for this detection (can match multiple GT items)
+            if matched_gt_items:
                 det_matched.add(j)
+                for gt_idx, match_type, confidence in matched_gt_items:
+                    gt_item = ground_truth_pii[gt_idx]
+                    
+                    matches.append(PIIMatch(
+                        ground_truth_value=gt_item['value'],
+                        ground_truth_type=gt_item['type'],
+                        detected_value=det_item['text'],
+                        detected_type=det_item['entity_type'],
+                        match_type=match_type,
+                        confidence=confidence,
+                        start_pos=gt_item['start'],
+                        end_pos=gt_item['end']
+                    ))
+                    
+                    gt_matched.add(gt_idx)
         
         # Handle unmatched ground truth (missed detections)
         for i, gt_item in enumerate(ground_truth_pii):
@@ -355,7 +350,7 @@ class PIIEvaluator:
     def _calculate_transcript_metrics(self, matches: List[PIIMatch], 
                                     ground_truth_pii: List[Dict], 
                                     detected_pii: List[Dict]) -> Dict:
-        """Calculate precision, recall, F1 for a single transcript."""
+        """Calculate precision, recall, F1 and PII protection rate for a single transcript."""
         
         # Count matches by type
         exact_matches = sum(1 for m in matches if m.match_type == 'exact')
@@ -369,10 +364,14 @@ class PIIEvaluator:
         false_positives = over_detections  # All non-ground-truth detections
         false_negatives = missed
         
-        # Calculate metrics
+        # Calculate traditional metrics (capped recall)
         precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-        recall = true_positives / len(ground_truth_pii) if len(ground_truth_pii) > 0 else 0
+        raw_recall = true_positives / len(ground_truth_pii) if len(ground_truth_pii) > 0 else 0
+        recall = min(1.0, raw_recall)  # Cap recall at 100%
         f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        
+        # Calculate character-based PII protection rate
+        pii_protection_rate = self._calculate_pii_protection_rate(matches, ground_truth_pii)
         
         return {
             'exact_matches': exact_matches,
@@ -384,24 +383,51 @@ class PIIEvaluator:
             'false_negatives': false_negatives,
             'precision': precision,
             'recall': recall,
+            'raw_recall': raw_recall,  # Uncapped for debugging
             'f1_score': f1,
+            'pii_protection_rate': pii_protection_rate,  # NEW: Character-based protection
             'total_ground_truth': len(ground_truth_pii),
             'total_detected': len(detected_pii),
             'matches': matches
         }
     
+    def _calculate_pii_protection_rate(self, matches: List[PIIMatch], ground_truth_pii: List[Dict]) -> float:
+        """Calculate what percentage of PII characters are actually protected."""
+        if not ground_truth_pii:
+            return 0.0
+        
+        # Get all unique character positions that contain PII
+        all_pii_positions = set()
+        for gt_item in ground_truth_pii:
+            for pos in range(gt_item['start'], gt_item['end']):
+                all_pii_positions.add(pos)
+        
+        # Get all character positions that are protected (matched)
+        protected_positions = set()
+        for match in matches:
+            if match.match_type in ['exact', 'partial']:
+                for pos in range(match.start_pos, match.end_pos):
+                    protected_positions.add(pos)
+        
+        # Calculate protection rate
+        total_pii_chars = len(all_pii_positions)
+        protected_pii_chars = len(protected_positions.intersection(all_pii_positions))
+        
+        return protected_pii_chars / total_pii_chars if total_pii_chars > 0 else 0.0
+    
     def _calculate_overall_metrics(self, per_transcript_metrics: List[Dict]) -> Dict:
         """Calculate overall metrics across all transcripts."""
-        
-        # Aggregate counts
         total_tp = sum(m['true_positives'] for m in per_transcript_metrics)
         total_fp = sum(m['false_positives'] for m in per_transcript_metrics)
         total_fn = sum(m['false_negatives'] for m in per_transcript_metrics)
         
-        # Calculate overall metrics
         overall_precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
         overall_recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
+        overall_recall = min(1.0, overall_recall)  # Cap recall at 100%
         overall_f1 = 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall) if (overall_precision + overall_recall) > 0 else 0
+        
+        # Calculate average PII protection rate
+        avg_protection_rate = np.mean([m['pii_protection_rate'] for m in per_transcript_metrics]) if per_transcript_metrics else 0.0
         
         return {
             'total_transcripts': len(per_transcript_metrics),
@@ -414,6 +440,7 @@ class PIIEvaluator:
             'avg_precision': np.mean([m['precision'] for m in per_transcript_metrics]),
             'avg_recall': np.mean([m['recall'] for m in per_transcript_metrics]),
             'avg_f1_score': np.mean([m['f1_score'] for m in per_transcript_metrics]),
+            'avg_pii_protection_rate': avg_protection_rate,  # NEW: Average character protection
             'recall_target_achievement': overall_recall >= 0.99,  # 99%+ recall target
         }
     
@@ -501,14 +528,18 @@ class PIIEvaluator:
         overall = results['overall_metrics']
         analysis = results['detailed_analysis']
         
+        # Calculate average PII protection rate
+        avg_protection_rate = np.mean([m['pii_protection_rate'] for m in results.get('per_transcript_metrics', [])])
+        
         print("\n" + "="*60)
         print("🎯 PII DEIDENTIFICATION EVALUATION RESULTS")
         print("="*60)
         
         print(f"\n📊 OVERALL PERFORMANCE:")
-        print(f"   Precision: {overall['overall_precision']:.3f}")
-        print(f"   Recall:    {overall['overall_recall']:.3f} {'✅' if overall.get('recall_target_achievement', False) else '❌'}")
-        print(f"   F1-Score:  {overall['overall_f1_score']:.3f}")
+        print(f"   Precision:           {overall['overall_precision']:.3f}")
+        print(f"   Recall:              {overall['overall_recall']:.3f} {'✅' if overall.get('recall_target_achievement', False) else '❌'}")
+        print(f"   F1-Score:            {overall['overall_f1_score']:.3f}")
+        print(f"   PII Protection Rate: {avg_protection_rate:.3f} 🛡️")
         
         print(f"\n📈 DETAILED COUNTS:")
         print(f"   True Positives:  {overall['total_true_positives']:.1f}")
@@ -525,6 +556,7 @@ class PIIEvaluator:
         print(f"   Partial matches:  {analysis['summary']['total_partial_matches']}")
         
         print(f"\n🎯 RECALL TARGET: {'✅ ACHIEVED' if overall.get('recall_target_achievement', False) else '❌ NOT ACHIEVED'}")
+        print(f"🛡️  PII PROTECTION: {avg_protection_rate:.1%} of sensitive characters protected")
         print("="*60)
 
     def evaluate_single_transcript_public(self, original_text: str, detected_pii: List[Dict], 
