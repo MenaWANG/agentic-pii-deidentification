@@ -19,7 +19,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
                                       metric: str = 'f1_score', 
                                       n_cases: int = 3, 
                                       ascending: bool = True,
-                                      matching_mode: str = 'lenient') -> List[Dict]:
+                                      matching_mode: str = 'business') -> List[Dict]:
     """
     Get n transcript cases ranked by performance metric.
     
@@ -29,7 +29,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
         metric: 'recall', 'precision', 'f1_score' - which metric to rank by
         n_cases: Number of cases to return (default 3)
         ascending: True for worst performers, False for best performers
-        matching_mode: 'lenient' or 'strict' evaluation mode
+        matching_mode: 'business' or 'research' evaluation mode
         
     Returns:
         List of transcript data dicts ready for diagnostic HTML table
@@ -176,7 +176,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
 def create_diagnostic_html_table_configurable(transcript_data: List[Dict], 
                                             title: str = "PII Analysis", 
                                             description: str = "", 
-                                            matching_mode: str = 'lenient') -> str:
+                                            matching_mode: str = 'business') -> str:
     """
     Create configurable diagnostic HTML table for PII analysis.
     
@@ -184,15 +184,15 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
         transcript_data: List of transcript data dictionaries
         title: Title for the analysis table
         description: Description text to display
-        matching_mode: 'lenient' (default) = any PII detection = success
-                      'strict' = exact type matching required
+        matching_mode: 'business' (default) = any PII detection = success
+                      'research' = exact type matching required
                       
     Returns:
         HTML string for display in notebooks
         
     Notes:
-        - Business-focused (lenient): Any PII detection covering ground truth = SUCCESS
-        - Research-focused (strict): Exact entity type matching required for SUCCESS
+        - Business-focused (business): Any PII detection covering ground truth = SUCCESS
+        - Research-focused (research): Exact entity type matching required for SUCCESS
     """
     
     # Initialize evaluator with matching mode
@@ -200,8 +200,8 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     
     # Show mode information
     mode_info = {
-        'lenient': "🏢 <strong>Business Mode:</strong> Any PII detection covering ground truth = SUCCESS",
-        'strict': "🔬 <strong>Research Mode:</strong> Exact entity type matching required for SUCCESS"
+        'business': "🏢 <strong>Business Mode:</strong> Any PII detection covering ground truth = SUCCESS",
+        'research': "🔬 <strong>Research Mode:</strong> Exact entity type matching required for SUCCESS"
     }
     
     html_content = f"""
@@ -315,7 +315,7 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
             )
         
         # Performance status (adjusted for matching mode)
-        recall_threshold = 0.90 if matching_mode == 'lenient' else 0.85  # Lenient mode should achieve higher recall
+        recall_threshold = 0.90 if matching_mode == 'business' else 0.85  # business mode should achieve higher recall
         
         if recall >= recall_threshold and precision >= 0.8:
             status = "🟢 Excellent Protection"
