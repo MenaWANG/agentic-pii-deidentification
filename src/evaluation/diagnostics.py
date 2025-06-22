@@ -335,10 +335,10 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
         metrics_content = f"""
         <strong>📋 CALL ID:</strong> {call_id}<br/>
         <strong>🎯 Total PII Occurrences:</strong> {total_pii_occurrences}<br/>
-        <strong>🔍 PII Detected:</strong> {len(detected_pii)}<br/>
-        <strong>✅ Exact Matches:</strong> {exact_matches}<br/>
-        <strong>⚡ Partial Matches:</strong> {partial_matches}<br/>        
-        <strong>🔍 Missed Matches:</strong> {missed_matches}<br/>
+        {f'<strong>🔍 PII Detected:</strong> {len(detected_pii)}<br/>' if False else ''}
+        {f'<strong>✅ Exact Matches:</strong> {exact_matches}<br/>' if False else ''}
+        {f'<strong>⚡ Partial Matches:</strong> {partial_matches}<br/>' if False else ''}        
+        {f'<strong>🔍 Missed Matches:</strong> {missed_matches}<br/>' if False else ''}
         <hr style="margin: 8px 0;"/>
         <strong>📈 PERFORMANCE ({matching_mode.upper()}):</strong><br/>
         &nbsp;&nbsp;• Recall: <strong>{recall:.1%}</strong><br/>

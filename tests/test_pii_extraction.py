@@ -1,60 +1,35 @@
 """
 Tests for PII extraction functionality.
 """
-import json
-import pandas as pd
-from pathlib import Path
-import sys
-import os
-import unittest
-
-# Add src to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
+import pytest
 from evaluation.metrics import PIIEvaluator
 
-class TestPIIExtraction(unittest.TestCase):
+
+@pytest.mark.unit
+@pytest.mark.evaluation
+class TestPIIExtraction:
     
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_method(self, sample_transcript, expected_results, sample_ground_truth):
         """Set up test fixtures."""
         self.evaluator = PIIEvaluator(matching_mode='business')
-        
-        # Load test data
-        test_data_dir = os.path.join(os.path.dirname(__file__), 'test_data')
-        
-        with open(os.path.join(test_data_dir, 'simple_transcript.txt'), 'r') as f:
-            self.transcript = f.read()
-            
-        with open(os.path.join(test_data_dir, 'expected_results.json'), 'r') as f:
-            self.expected = json.load(f)
-            
-        # Ground truth PII for the test transcript
-        self.ground_truth = {
-            'member_first_name': 'Ella',
-            'member_full_name': 'Ella Michael Wilson',
-            'member_email': 'ella.wilson@example.com',
-            'member_phone': '0412 345 678',
-            'member_mobile': '0412 345 678',  # Same as phone for our test
-            'member_address': '',  # Empty in our test transcript
-            'member_number': '',   # Empty in our test transcript
-            'agent_first_name': 'Sarah',
-            'consultant_first_name': 'Sarah',  # Same as agent for our test
-            'case_number': 'CASE-2024-001'
-        }
+        self.transcript = sample_transcript
+        self.expected = expected_results
+        self.ground_truth = sample_ground_truth
     
     def test_pii_position_extraction(self):
         """Test that PII positions are correctly extracted from transcript."""
         # Test member first name (should find 2 occurrences)
         positions = self.evaluator._find_pii_positions('Ella', self.transcript, 'member_first_name')
-        self.assertEqual(len(positions), 2, "Should find 2 occurrences of 'Ella'")
+        assert len(positions) == 2, "Should find 2 occurrences of 'Ella'"
         
         # Test member full name (should find 1 occurrence)
         positions = self.evaluator._find_pii_positions('Ella Michael Wilson', self.transcript, 'member_full_name')
-        self.assertEqual(len(positions), 1, "Should find 1 occurrence of full name")
+        assert len(positions) == 1, "Should find 1 occurrence of full name"
         
         # Test email (should find 1 occurrence)
         positions = self.evaluator._find_pii_positions('ella.wilson@example.com', self.transcript, 'member_email')
-        self.assertEqual(len(positions), 1, "Should find 1 occurrence of email")
+        assert len(positions) == 1, "Should find 1 occurrence of email"
     
     def test_word_boundary_exclusion(self):
         """Test that names within emails are properly excluded."""
@@ -64,7 +39,7 @@ class TestPIIExtraction(unittest.TestCase):
         # Should find standalone 'Ella' occurrences but not the one in email
         for start, end in positions:
             text_around = self.transcript[max(0, start-10):end+10]
-            self.assertNotIn('@', text_around, f"Found 'ella' too close to email context: {text_around}")
+            assert '@' not in text_around, f"Found 'ella' too close to email context: {text_around}"
     
     def test_total_pii_count(self):
         """Test that total PII count matches expected."""
@@ -88,8 +63,8 @@ class TestPIIExtraction(unittest.TestCase):
         
         pii_items = self.evaluator._extract_ground_truth_pii(gt_series, self.transcript)
         
-        self.assertEqual(len(pii_items), self.expected['total_pii_count'], 
-                        f"Expected {self.expected['total_pii_count']} PII items, got {len(pii_items)}")
+        assert len(pii_items) == self.expected['test_001']['expected_pii_count'], \
+            f"Expected {self.expected['test_001']['expected_pii_count']} PII items, got {len(pii_items)}"
     
     def test_smart_matching_logic(self):
         """Test that smart matching allows one detection to match multiple overlapping GT items."""
@@ -114,8 +89,8 @@ class TestPIIExtraction(unittest.TestCase):
         
         # Should have 2 matches (one detection matching both GT items)
         successful_matches = [m for m in matches if m.match_type in ['exact', 'partial']]
-        self.assertEqual(len(successful_matches), 2, 
-                        "Smart matching should allow one detection to match multiple overlapping GT items")
+        assert len(successful_matches) == 2, \
+            "Smart matching should allow one detection to match multiple overlapping GT items"
     
     def test_pii_protection_rate_calculation(self):
         """Test character-based PII protection rate calculation."""
@@ -143,8 +118,8 @@ class TestPIIExtraction(unittest.TestCase):
         
         # Should protect 9 out of 10 characters = 0.9
         expected_rate = 9 / 10  # 4 + 5 protected out of 4 + 6 total
-        self.assertAlmostEqual(protection_rate, expected_rate, places=2,
-                              msg="PII protection rate should be calculated correctly")
+        assert abs(protection_rate - expected_rate) < 0.01, \
+            "PII protection rate should be calculated correctly"
     
     def test_recall_capping(self):
         """Test that recall is capped at 100% even with over-detection."""
@@ -169,27 +144,5 @@ class TestPIIExtraction(unittest.TestCase):
         )
         
         # Recall should be capped at 1.0 even if raw recall > 1.0
-        self.assertLessEqual(metrics['recall'], 1.0, "Recall should be capped at 100%")
-        self.assertIn('raw_recall', metrics, "Should include uncapped raw recall for debugging")
-
-
-def run_tests():
-    """Run all PII extraction tests and return success status."""
-    try:
-        # Create test suite
-        loader = unittest.TestLoader()
-        suite = loader.loadTestsFromTestCase(TestPIIExtraction)
-        
-        # Run tests
-        runner = unittest.TextTestRunner(verbosity=2)
-        result = runner.run(suite)
-        
-        # Return success status
-        return result.wasSuccessful()
-    except Exception as e:
-        print(f"Error running tests: {e}")
-        return False
-
-
-if __name__ == '__main__':
-    unittest.main() 
+        assert metrics['recall'] <= 1.0, "Recall should be capped at 100%"
+        assert 'raw_recall' in metrics, "Should include uncapped raw recall for debugging" 

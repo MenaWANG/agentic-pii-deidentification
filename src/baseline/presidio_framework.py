@@ -95,7 +95,7 @@ class PurePresidioFramework:
                 'PERSON', 'EMAIL_ADDRESS', 'PHONE_NUMBER', 
                 'LOCATION', 'ORGANIZATION', 'DATE_TIME',
                 'CREDIT_CARD', 'CRYPTO', 'IBAN_CODE', 'IP_ADDRESS',
-                'NRP', 'MEDICAL_LICENSE', 'URL', 'US_SSN'
+                'NRP', 'MEDICAL_LICENSE', 'US_SSN'
             ]
         )
         
