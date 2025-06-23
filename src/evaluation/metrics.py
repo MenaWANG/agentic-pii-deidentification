@@ -71,9 +71,9 @@ class PIIEvaluator:
         
         # Phone number patterns for Australian numbers
         self.phone_patterns = [
-            r'\b0[2-9]\d{4}\s?\d{3}\s?\d{3}\b',  # 0X XXXX XXXX (landline)
-            r'\b04\d{4}\s?\d{3}\s?\d{3}\b',      # 04XX XXX XXX (mobile)
-            r'\b\+61\s?[2-9]\s?\d{4}\s?\d{4}\b'  # +61 X XXXX XXXX (international)
+            r'\b0[2-9]\s?\d{4}\s?\d{4}\b',       # 0X XXXX XXXX (landline)
+            r'\b04\d{2}\s?\d{3}\s?\d{3}\b',      # 04XX XXX XXX (mobile)
+            r'\b\+61\s?[2-9]\s?\d{4}\s?\d{4}\b', # +61 X XXXX XXXX (international)
             r'\b04\d{4}\s?\d{3}\s?\d{3}\b',      # 04XXXX XXX XXX (synthetic data)
         ]
     
@@ -254,6 +254,7 @@ class PIIEvaluator:
         det_matched = set()
         
         # SMART MATCHING: Allow one detection to match multiple overlapping ground truth items
+        # For example, Jane detected as <PERSON> can match with member_first_name as well as member_full_name
         for j, det_item in enumerate(detected_pii):
             matched_gt_items = []
             
