@@ -58,6 +58,8 @@ class PIIEvaluator:
             'EMAIL_ADDRESS': ['member_email'],
             'PHONE_NUMBER': ['member_mobile'],
             'LOCATION': ['member_address'],
+            'AU_ADDRESS': ['member_address'],  # Custom Australian address recognizer
+            'MEMBER_NUMBER': ['member_number'],  # Custom member number recognizer  
             'ORGANIZATION': [],  # Not typically in our ground truth
             'DATE_TIME': [],     # Usually not PII in our context
             'US_SSN': ['member_number'],  # Membership numbers might be detected as SSN
@@ -602,7 +604,7 @@ class PIIEvaluator:
         
         print(f"\n🔍 ENTITY TYPE BREAKDOWN:")
         for entity_type, metrics in results['per_entity_type_metrics'].items():
-            print(f"   {entity_type:20} | P: {metrics['precision']:.3f} | R: {metrics['recall']:.3f} | F1: {metrics['f1_score']:.3f}")
+            print(f"   {entity_type:22} | P: {metrics['precision']:.3f} | R: {metrics['recall']:.3f} | F1: {metrics['f1_score']:.3f}")
         
         print(f"\n⚠️  ISSUES IDENTIFIED:")
         print(f"   Missed PII:       {analysis['summary']['total_missed']}")

@@ -1,7 +1,7 @@
 """
 Pure Microsoft Presidio Implementation - Version A
 This framework implements the baseline PII deidentification using only Microsoft Presidio
-without any abstraction layers, exactly as specified in the project plan.
+with custom recognizers for member numbers and enhanced address detection.
 """
 
 import pandas as pd
@@ -9,8 +9,11 @@ import time
 from typing import Dict, List, Tuple
 from datetime import datetime
 import json
+import re
 
-from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer import AnalyzerEngine, RecognizerResult, Pattern
+from presidio_analyzer.recognizer_registry import RecognizerRegistry
+from presidio_analyzer.pattern_recognizer import PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 
@@ -25,14 +28,14 @@ except ImportError:
 class PurePresidioFramework:
     """
     Pure Microsoft Presidio implementation for PII deidentification.
-    Follows the exact architecture specified in the ReadMe.md for Version A.
+    Includes custom recognizers for 8-digit member numbers and improved australian address detection.
     """
     
     def __init__(self, enable_mlflow: bool = True):
-        """Initialize the Pure Presidio Framework with Australian localization."""
+        """Initialize the Presidio Framework with custom recognizers."""
         self.enable_mlflow = enable_mlflow and MLFLOW_AVAILABLE
         
-        # Initialize Presidio engines
+        # Initialize Presidio engines with custom recognizers
         self.analyzer = self._setup_analyzer()
         self.anonymizer = AnonymizerEngine()
         
@@ -41,14 +44,67 @@ class PurePresidioFramework:
             'total_transcripts': 0,
             'total_pii_detected': 0,
             'processing_time': 0,
-            'pii_types': {}
+            'pii_types': {},
+            'custom_detections': {
+                'member_numbers': 0,
+                'addresses': 0
+            }
         }
         
         if self.enable_mlflow:
             self._setup_mlflow()
     
+    def _create_member_number_recognizer(self) -> PatternRecognizer:
+        """Create custom recognizer for 8-digit member numbers."""
+        # Pattern for exactly 8 digits (member numbers)
+        member_number_patterns = [
+            Pattern(
+                name="member_number_8_digits",
+                regex=r"\b\d{8}\b",
+                score=0.9
+            ),
+            Pattern(
+                name="member_number_with_spaces",
+                regex=r"\b\d{4}\s?\d{4}\b",
+                score=0.85
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="MEMBER_NUMBER",
+            patterns=member_number_patterns,
+            name="member_number_recognizer"
+        )
+    
+    def _create_enhanced_address_recognizer(self) -> PatternRecognizer:
+        """Create enhanced address recognizer for Australian addresses."""
+        # Australian address patterns
+        australian_address_patterns = [
+            Pattern(
+                name="australian_street_address",
+                regex=r"\b\d{1,5}\s+[A-Za-z\s]+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Boulevard|Blvd|Circuit|Cct|Court|Ct|Place|Pl|Way|Crescent|Cres)\b,?\s*[A-Za-z\s]+\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4}\b",
+                score=0.95
+            ),
+            Pattern(
+                name="australian_street_simple",
+                regex=r"\b\d{1,5}\s+[A-Za-z\s]+(Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln)\b",
+                score=0.7
+            ),
+            Pattern(
+                name="australian_suburb_state_postcode",
+                regex=r"\b[A-Za-z\s]+\s+(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4}\b",
+                score=0.8
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="AU_ADDRESS",
+            patterns=australian_address_patterns,
+            name="australian_address_recognizer"
+        )
+    
     def _setup_analyzer(self) -> AnalyzerEngine:
-        """Setup analyzer with Australian localization patterns."""
+        """Setup analyzer with custom recognizers and Australian localization."""
         # Configure NLP engine
         configuration = {
             "nlp_engine_name": "spacy",
@@ -58,8 +114,28 @@ class PurePresidioFramework:
         nlp_engine_provider = NlpEngineProvider(nlp_configuration=configuration)
         nlp_engine = nlp_engine_provider.create_engine()
         
-        # Create analyzer with Australian phone number support
-        analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
+        # Create registry and add custom recognizers
+        registry = RecognizerRegistry()
+        
+        # Add default recognizers
+        registry.load_predefined_recognizers(nlp_engine=nlp_engine, languages=["en"])
+        
+        # Add custom recognizers
+        member_number_recognizer = self._create_member_number_recognizer()
+        enhanced_address_recognizer = self._create_enhanced_address_recognizer()
+        
+        registry.add_recognizer(member_number_recognizer)
+        registry.add_recognizer(enhanced_address_recognizer)
+        
+        # Create analyzer with custom registry
+        analyzer = AnalyzerEngine(
+            nlp_engine=nlp_engine,
+            registry=registry
+        )
+        
+        # print("✅  Presidio Framework initialized with custom recognizers:")
+        # print("   📍 8-digit member number recognizer")
+        # print("   🏠 Enhanced Australian address recognizer")
         
         return analyzer
     
@@ -77,7 +153,7 @@ class PurePresidioFramework:
     
     def process_transcript(self, text: str) -> Dict:
         """
-        Process a single transcript using pure Presidio - no abstraction layers.
+        Process a single transcript using Presidio with custom recognizers.
         
         Args:
             text: Raw call transcript text
@@ -87,7 +163,7 @@ class PurePresidioFramework:
         """
         start_time = time.time()
         
-        # Direct Presidio analysis - no abstraction layers
+        # Presidio analysis with custom entities
         analyzer_results = self.analyzer.analyze(
             text=text, 
             language='en',
@@ -95,11 +171,13 @@ class PurePresidioFramework:
                 'PERSON', 'EMAIL_ADDRESS', 'PHONE_NUMBER', 
                 'LOCATION', 'ORGANIZATION', 'DATE_TIME',
                 'CREDIT_CARD', 'CRYPTO', 'IBAN_CODE', 'IP_ADDRESS',
-                'NRP', 'MEDICAL_LICENSE', 'US_SSN'
+                'NRP', 'MEDICAL_LICENSE', 'US_SSN',
+                'MEMBER_NUMBER',  # Custom entity
+                'AU_ADDRESS'      # Custom entity
             ]
         )
         
-        # Direct Presidio anonymization - no abstraction layers
+        # Direct Presidio anonymization
         anonymized_result = self.anonymizer.anonymize(
             text=text,
             analyzer_results=analyzer_results
@@ -107,8 +185,10 @@ class PurePresidioFramework:
         
         processing_time = time.time() - start_time
         
-        # Extract PII information for analysis
+        # Extract PII information for analysis with custom entity tracking
         pii_detections = []
+        custom_stats = {'member_numbers': 0, 'addresses': 0}
+        
         for result in analyzer_results:
             pii_detections.append({
                 'entity_type': result.entity_type,
@@ -117,13 +197,20 @@ class PurePresidioFramework:
                 'score': result.score,
                 'text': text[result.start:result.end]
             })
+            
+            # Track custom detections
+            if result.entity_type == 'MEMBER_NUMBER':
+                custom_stats['member_numbers'] += 1
+            elif result.entity_type in ['AU_ADDRESS', 'LOCATION']:
+                custom_stats['addresses'] += 1
         
         return {
             'anonymized_text': anonymized_result.text,
             'original_text': text,
             'pii_detections': pii_detections,
             'processing_time': processing_time,
-            'pii_count': len(pii_detections)
+            'pii_count': len(pii_detections),
+            'custom_detections': custom_stats
         }
     
     def process_dataset(self, csv_path: str, output_path: str = None) -> pd.DataFrame:
@@ -208,6 +295,10 @@ class PurePresidioFramework:
             if entity_type not in self.stats['pii_types']:
                 self.stats['pii_types'][entity_type] = 0
             self.stats['pii_types'][entity_type] += 1
+        
+        # Track custom detections
+        for detection_type, count in result['custom_detections'].items():
+            self.stats['custom_detections'][detection_type] += count
     
     def _calculate_final_metrics(self, results_df: pd.DataFrame, total_time: float) -> Dict:
         """Calculate final processing metrics with detailed timing information."""
@@ -237,7 +328,8 @@ class PurePresidioFramework:
             'total_processing_time_seconds': round(total_time, 4),
             'avg_processing_time_per_transcript_seconds': round(avg_time_per_transcript, 4),
             'estimated_time_for_1m_transcripts': time_1m_estimate,
-            'pii_types_distribution': dict(self.stats['pii_types'])
+            'pii_types_distribution': dict(self.stats['pii_types']),
+            'custom_detections_distribution': dict(self.stats['custom_detections'])
         }
     
     def _log_mlflow_metrics(self, metrics: Dict, results_df: pd.DataFrame):
@@ -257,6 +349,9 @@ class PurePresidioFramework:
             
             # Log PII types distribution as JSON
             mlflow.log_dict(metrics['pii_types_distribution'], "pii_types_distribution.json")
+            
+            # Log custom detections distribution as JSON
+            mlflow.log_dict(metrics['custom_detections_distribution'], "custom_detections_distribution.json")
             
             # Log sample results
             sample_results = results_df.head(5)[['call_id', 'pii_count', 'processing_time']].to_dict('records')
