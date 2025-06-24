@@ -23,7 +23,7 @@ class PIIMatch:
     detected_value: str
     detected_type: str
     match_type: str  # 'exact', 'partial', 'over_detection', 'missed'
-    confidence: float
+    overlap_ratio: float  
     start_pos: int
     end_pos: int
 
@@ -248,20 +248,20 @@ class PIIEvaluator:
     def _match_detections_to_ground_truth(self, detected_pii: List[Dict], 
                                          ground_truth_pii: List[Dict], 
                                          transcript: str) -> List[PIIMatch]:
-        """Match detected PII to ground truth with smart matching logic."""
+        """Match detected PII to ground truth with accumulative matching logic."""
         matches = []
-        gt_matched = set()
         det_matched = set()
         
-        # SMART MATCHING: Allow one detection to match multiple overlapping ground truth items
-        # For example, Jane detected as <PERSON> can match with member_first_name as well as member_full_name
+        # Track accumulated coverage for each ground truth item
+        gt_accumulated_coverage = {}
+        gt_match_details = {}  # Store individual matches for each GT item
+        
+        # IMPROVED MATCHING: Allow multiple detections to contribute to same ground truth item
+        # Accumulate overlap ratios up to 1.0 for better coverage calculation
         for j, det_item in enumerate(detected_pii):
-            matched_gt_items = []
+            detection_matched_something = False
             
             for i, gt_item in enumerate(ground_truth_pii):
-                if i in gt_matched:
-                    continue
-                    
                 # Calculate overlap between detected and ground truth positions
                 det_start, det_end = det_item['start'], det_item['end']
                 gt_start, gt_end = gt_item['start'], gt_item['end']
@@ -280,9 +280,27 @@ class PIIEvaluator:
                     overlap_ratio = overlap_size / gt_size if gt_size > 0 else 0
                     
                     if overlap_ratio > 0.1:  # Even small overlap counts as protection
-                        match_score = overlap_ratio
                         match_type = 'exact' if overlap_ratio > 0.8 else 'partial'
-                        matched_gt_items.append((i, match_type, match_score))
+                        
+                        # Initialize accumulation for this GT item if not seen before
+                        if i not in gt_accumulated_coverage:
+                            gt_accumulated_coverage[i] = 0.0
+                            gt_match_details[i] = []
+                        
+                        # Add this detection's contribution (capped at 1.0 total)
+                        new_total = min(1.0, gt_accumulated_coverage[i] + overlap_ratio)
+                        actual_contribution = new_total - gt_accumulated_coverage[i]
+                        gt_accumulated_coverage[i] = new_total
+                        
+                        # Store match details
+                        gt_match_details[i].append({
+                            'detected_value': det_item['text'],
+                            'detected_type': det_item['entity_type'],
+                            'overlap_ratio': actual_contribution,
+                            'match_type': match_type
+                        })
+                        
+                        detection_matched_something = True
                         
                 elif self.matching_mode == 'research':
                     # RESEARCH: Require exact entity type matching + good positional overlap
@@ -293,39 +311,75 @@ class PIIEvaluator:
                         overlap_ratio = overlap_size / gt_size if gt_size > 0 else 0
                         
                         if overlap_ratio > 0.5:  # Require substantial overlap in research mode
-                            match_score = overlap_ratio
                             match_type = 'exact' if overlap_ratio > 0.8 else 'partial'
-                            matched_gt_items.append((i, match_type, match_score))
+                            
+                            # Initialize accumulation for this GT item if not seen before
+                            if i not in gt_accumulated_coverage:
+                                gt_accumulated_coverage[i] = 0.0
+                                gt_match_details[i] = []
+                            
+                            # Add this detection's contribution (capped at 1.0 total)
+                            new_total = min(1.0, gt_accumulated_coverage[i] + overlap_ratio)
+                            actual_contribution = new_total - gt_accumulated_coverage[i]
+                            gt_accumulated_coverage[i] = new_total
+                            
+                            # Store match details
+                            gt_match_details[i].append({
+                                'detected_value': det_item['text'],
+                                'detected_type': det_item['entity_type'],
+                                'overlap_ratio': actual_contribution,
+                                'match_type': match_type
+                            })
+                            
+                            detection_matched_something = True
             
-            # Record matches for this detection (can match multiple GT items)
-            if matched_gt_items:
+            # Track which detections were matched
+            if detection_matched_something:
                 det_matched.add(j)
-                for gt_idx, match_type, confidence in matched_gt_items:
-                    gt_item = ground_truth_pii[gt_idx]
-                    
-                    matches.append(PIIMatch(
-                        ground_truth_value=gt_item['value'],
-                        ground_truth_type=gt_item['type'],
-                        detected_value=det_item['text'],
-                        detected_type=det_item['entity_type'],
-                        match_type=match_type,
-                        confidence=confidence,
-                        start_pos=gt_item['start'],
-                        end_pos=gt_item['end']
-                    ))
-                    
-                    gt_matched.add(gt_idx)
         
-        # Handle unmatched ground truth (missed detections)
+        # Create consolidated matches for each ground truth item
         for i, gt_item in enumerate(ground_truth_pii):
-            if i not in gt_matched:
+            if i in gt_accumulated_coverage:
+                # GT item was matched - create consolidated match
+                total_coverage = gt_accumulated_coverage[i]
+                match_details = gt_match_details[i]
+                
+                # Determine overall match type based on total coverage
+                if total_coverage > 0.8:
+                    overall_match_type = 'exact'
+                else:
+                    overall_match_type = 'partial'
+                
+                # Create a single consolidated match entry
+                # Use the first detection's details for detected_value and detected_type
+                first_match = match_details[0]
+                if len(match_details) > 1:
+                    # Multiple detections - combine their text
+                    combined_text = " + ".join([m['detected_value'] for m in match_details])
+                    combined_type = " + ".join(list(set([m['detected_type'] for m in match_details])))
+                else:
+                    combined_text = first_match['detected_value']
+                    combined_type = first_match['detected_type']
+                
+                matches.append(PIIMatch(
+                    ground_truth_value=gt_item['value'],
+                    ground_truth_type=gt_item['type'],
+                    detected_value=combined_text,
+                    detected_type=combined_type,
+                    match_type=overall_match_type,
+                    overlap_ratio=total_coverage,
+                    start_pos=gt_item['start'],
+                    end_pos=gt_item['end']
+                ))
+            else:
+                # GT item was not matched - missed detection
                 matches.append(PIIMatch(
                     ground_truth_value=gt_item['value'],
                     ground_truth_type=gt_item['type'],
                     detected_value='',
                     detected_type='',
                     match_type='missed',
-                    confidence=0.0,
+                    overlap_ratio=0.0,
                     start_pos=gt_item['start'],
                     end_pos=gt_item['end']
                 ))
@@ -333,15 +387,14 @@ class PIIEvaluator:
         # Handle unmatched detections (over-detections)
         for j, det_item in enumerate(detected_pii):
             if j not in det_matched:
-                # ALL unmatched detections are over-detections
-                # Only ground truth-based matches should count as correct
+                # Detection didn't overlap with any ground truth
                 matches.append(PIIMatch(
                     ground_truth_value='',
                     ground_truth_type='',
                     detected_value=det_item['text'],
                     detected_type=det_item['entity_type'],
                     match_type='over_detection',
-                    confidence=det_item['score'],
+                    overlap_ratio=det_item['score'],  # Keep model confidence for over-detections
                     start_pos=det_item['start'],
                     end_pos=det_item['end']
                 ))
@@ -361,7 +414,7 @@ class PIIEvaluator:
         
         # Calculate true positives (only ground truth matches count)
         true_positives = (exact_matches + 
-                         sum(m.confidence for m in matches if m.match_type == 'partial'))
+                         sum(m.overlap_ratio for m in matches if m.match_type == 'partial'))
         false_positives = over_detections  # All non-ground-truth detections
         false_negatives = missed
         
@@ -452,7 +505,7 @@ class PIIEvaluator:
         for transcript_metrics in per_transcript_metrics:
             for match in transcript_metrics['matches']:
                 if match.match_type in ['exact', 'partial']:
-                    entity_metrics[match.ground_truth_type]['tp'] += match.confidence
+                    entity_metrics[match.ground_truth_type]['tp'] += match.overlap_ratio
                 elif match.match_type == 'missed':
                     entity_metrics[match.ground_truth_type]['fn'] += 1
                 elif match.match_type == 'over_detection':
@@ -499,7 +552,7 @@ class PIIEvaluator:
                         'transcript_id': transcript_id,
                         'detected_type': match.detected_type,
                         'detected_value': match.detected_value,
-                        'confidence': match.confidence,
+                        'overlap_ratio': match.overlap_ratio,
                         'position': f"{match.start_pos}-{match.end_pos}"
                     })
                 elif match.match_type == 'partial':
@@ -509,7 +562,7 @@ class PIIEvaluator:
                         'ground_truth_value': match.ground_truth_value,
                         'detected_type': match.detected_type,
                         'detected_value': match.detected_value,
-                        'confidence': match.confidence,
+                        'overlap_ratio': match.overlap_ratio,
                         'position': f"{match.start_pos}-{match.end_pos}"
                     })
         

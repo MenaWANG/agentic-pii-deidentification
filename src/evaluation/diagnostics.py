@@ -453,7 +453,7 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
                     'call_id': call_id,
                     'detected_value': match.detected_value,
                     'ground_truth_value': match.ground_truth_value,
-                    'confidence': match.confidence,
+                    'overlap_ratio': match.overlap_ratio,
                     'original_text': result_row['original_transcript'][:200] + "...",
                     'context': result_row['original_transcript'][max(0, match.start_pos-50):match.end_pos+50]
                 })
@@ -582,7 +582,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
                 'call_id': call_id,
                 'detected_value': detection['text'],
                 'detected_type': detection['entity_type'],
-                'confidence': confidence,
+                'model_confidence': confidence,  
                 'is_correct': is_correct,
                 'context': result_row['original_transcript'][
                     max(0, detection['start']-50):detection['end']+50
