@@ -107,31 +107,9 @@ class AgenticFramework:
 
 The following diagram illustrates the sequential and conditional logic of the agentic orchestration pipeline:
 
-```mermaid
-graph TD
-    A["Call Transcript"] --> B{"Presidio Analyzer<br/>(Initial Scan)"};
-    B --> C{"Context Analyzer Agent<br/>(Assess Complexity)"};
-    C --> D{"Is transcript complex?"};
-    
-    D -- "No" --> E["PII Validator Agent<br/>(Review low-confidence PII)"];
-    D -- "Yes" --> F["PII Validator Agent<br/>(Review ALL PII)"];
-    
-    E --> G["Gap Detection Agent<br/>(Standard Mode)"];
-    F --> H["Gap Detection Agent<br/>(Intensive Mode)"];
+![Agentic PII Deidentification Pipeline](assets/images/agentic-pipeline-diagram.png)
 
-    subgraph "Final Review"
-        direction TB
-        G --> I{"Quality Assurance Agent<br/>(Final Arbiter)"};
-        H --> I;
-    end
-
-    I --> J["Cleaned Transcript"];
-
-    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef agent fill:#e8f4ff,stroke:#006eff,stroke-width:2px;
-    class A,J,D default;
-    class B,C,E,F,G,H,I agent;
-```
+> **Note**: This diagram shows the decision flow where the Context Analyzer Agent determines processing complexity, leading to either standard or intensive PII detection modes across subsequent agents.
 
 ## 📈 Scalability Architecture
 
@@ -254,22 +232,46 @@ config = {
 agentic-pii-deidentification/
 ├── .data/
 │   └── synthetic_call_transcripts.csv
+├── .dev/
+├── assets/
+│   └── images/
+│       └── agentic-pipeline-diagram.png
+├── config/
+│   └── deployment_config.yaml
+├── demo/
+│   ├── mlruns/
+│   ├── presidio_baseline_results.csv
+│   └── presidio_technical_diagnostics.ipynb
+├── experiments/
+│   └── mlflow_experiments/
+├── htmlcov/
 ├── src/
-│   ├── baseline/
-│   │   └── presidio_framework.py
 │   ├── agentic/
 │   │   ├── agents/
 │   │   └── orchestrator.py
+│   ├── baseline/
+│   │   └── presidio_framework.py
 │   ├── evaluation/
+│   │   ├── diagnostics.py
 │   │   └── metrics.py
 │   └── utils/
-│       ├── llm_provider.py
-│       └── data_processing.py
-├── experiments/
-│   └── mlflow_experiments/
-├── config/
-│   └── deployment_config.yaml
-└── ReadMe.md
+│       ├── data_processing.py
+│       └── llm_provider.py
+├── tests/
+│   ├── test_data/
+│   │   ├── expected_results.json
+│   │   ├── simple_transcript.txt
+│   │   └── test_ground_truth.csv
+│   ├── conftest.py
+│   ├── run_tests.py
+│   ├── test_baseline.py
+│   └── test_pii_extraction.py
+├── .coverage
+├── .gitignore
+├── LICENSE
+├── pytest.ini
+├── ReadMe.md
+└── requirements_py311.txt
 ```
 
 ## 🎯 Expected Outcomes
