@@ -146,3 +146,55 @@ class TestPIIExtraction:
         # Recall should be capped at 1.0 even if raw recall > 1.0
         assert metrics['recall'] <= 1.0, "Recall should be capped at 100%"
         assert 'raw_recall' in metrics, "Should include uncapped raw recall for debugging" 
+    
+    def test_recall_calculation(self):
+        """Test character-based PII protection rate calculation."""
+        # Only first name detected
+        detected_pii = [
+            {'text': 'Amelia', 'entity_type': 'PERSON', 'start': 0, 'end': 6, 'score': 0.9}
+        ]
+        
+        # Both first name and full name are demanded as ground truth
+        ground_truth_pii = [
+            {'value': 'Amelia Dai', 'type': 'member_full_name', 'start': 0, 'end': 10},
+            {'value': 'Amelia', 'type': 'member_first_name', 'start': 0, 'end': 6},
+        ]
+        
+        transcript ="""Amelia Dai loves playing the violin."""
+        
+        matches = self.evaluator._match_detections_to_ground_truth(
+            detected_pii, ground_truth_pii, transcript
+        )
+        
+        metrics = self.evaluator._calculate_transcript_metrics(
+            matches, ground_truth_pii, detected_pii
+        )
+        
+        # one match + partial_match
+        expected_recall = (1 + 0.6) / 2
+        assert abs(metrics['recall'] - expected_recall) < 0.01
+        assert abs(metrics['raw_recall'] -  expected_recall) < 0.01
+    
+    def test_pii_protection_rate_calculation_duplicated_positions(self):
+        """Test character-based PII protection rate calculation."""
+        # Mock matches covering some PII characters
+        matches = [
+            type('MockMatch', (), {
+                'match_type': 'partial', 
+                'start_pos': 0,
+                'end_pos': 6  
+            })()
+        ]
+        
+        # Ground truth PII covering 10 total characters
+        ground_truth_pii = [
+            {'start': 0, 'end': 6},  # first name
+            {'start': 0, 'end': 10}   # full name
+        ]
+        
+        protection_rate = self.evaluator._calculate_pii_protection_rate(matches, ground_truth_pii)
+        
+        # Should identify unique positions only, hence 6 out of 10 characters = 0.6
+        expected_rate = 6 / 10  
+        assert abs(protection_rate - expected_rate) < 0.01, \
+            "PII protection rate should be calculated correctly"
