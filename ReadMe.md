@@ -4,7 +4,7 @@ A state-of-the-art framework for detecting and removing Personally Identifiable 
 
 ## 📋 Project Overview
 
-**Objective**: Create two PII deidentification frameworks to clean call transcripts, comparing agentic AI approaches against traditional, pattern-based methods.
+**Objective**: Create PII deidentification frameworks to clean call transcripts, leveraging both agentic AI approaches and traditional, pattern-based methods.
 
 **Key Requirements**:
 - 🎯 **100% Recall Target**: Ensure all PII is removed, even at cost of some false positives

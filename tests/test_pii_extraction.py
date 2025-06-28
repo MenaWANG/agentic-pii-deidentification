@@ -147,7 +147,7 @@ class TestPIIExtraction:
         assert metrics['recall'] <= 1.0, "Recall should be capped at 100%"
         assert 'raw_recall' in metrics, "Should include uncapped raw recall for debugging" 
     
-    def test_recall_calculation(self):
+    def test_recall_calculations_partial_match(self):
         """Test character-based PII protection rate calculation."""
         # Only first name detected
         detected_pii = [
@@ -174,6 +174,31 @@ class TestPIIExtraction:
         expected_recall = (1 + 0.6) / 2
         assert abs(metrics['recall'] - expected_recall) < 0.01
         assert abs(metrics['raw_recall'] -  expected_recall) < 0.01
+
+    
+    def test_recall_calculations_full_match(self):
+        """Test character-based PII protection rate calculation."""
+        # Full name detected
+        detected_pii = [
+            {'text': 'Amelia Dai', 'entity_type': 'PERSON', 'start': 0, 'end': 10, 'score': 0.99}
+        ]        
+        # Both first name and full name are extracted as ground truth
+        ground_truth_pii = [
+            {'value': 'Amelia Dai', 'type': 'member_full_name', 'start': 0, 'end': 10},
+            {'value': 'Amelia', 'type': 'member_first_name', 'start': 0, 'end': 6},
+        ]        
+        transcript ="""Amelia Dai loves playing the violin."""
+        matches = self.evaluator._match_detections_to_ground_truth(
+            detected_pii, ground_truth_pii, transcript
+        )        
+        metrics = self.evaluator._calculate_transcript_metrics(
+            matches, ground_truth_pii, detected_pii
+        )        
+        # one match + partial_match
+        expected_raw_recall = (1 + 1) / 2
+        expected_recall = (1 + 1) / 2
+        assert abs(metrics['recall'] - expected_recall) < 0.01
+        assert abs(metrics['raw_recall'] -  expected_raw_recall) < 0.01
     
     def test_pii_protection_rate_calculation_duplicated_positions(self):
         """Test character-based PII protection rate calculation."""
