@@ -9,16 +9,14 @@ A state-of-the-art framework for detecting and removing Personally Identifiable 
 **Key Requirements**:
 - 🎯 **100% Recall Target**: Ensure all PII is removed, even at cost of some false positives
   > **Note on the 100% Recall Target**: Achieving a literal 100.00% recall is a significant technical challenge in automated systems dealing with the nuances of human language. This project is designed with a "zero-tolerance" philosophy, aiming to maximize recall, even at the expense of precision (false positives). While the agentic framework is architected to approach this goal as closely as possible, stakeholders should be aware of the inherent statistical nature of AI models and consider the small residual risk in downstream data handling processes.
-- 🔍 **Blind Processing**: No access to ground truth during deidentification
-- 💰 **Cost Efficient**: Total budget <$50 USD
-- 📈 **Enterprise Ready**: MLflow integration, vendor neutrality, Databricks deployment
+- 📈 **Enterprise Ready**: MLflow integration, LLM vendor neutrality, Databricks deployment
 - ⚡ **Scalable**: Handle high-volume data processing
 
 ## 📊 Data Specifications
 
 **Input Data**: `.data/synthetic_call_transcripts.csv`
 - **Processing Target**: `call_transcript` column (100 records)
-- **Ground Truth Columns**: `member_number`, `member_full_name`, `member_mobile`, `member_email`, `member_address`
+- **Ground Truth Columns**: `member_number`, `member_full_name`, `member_first_name`, `member_mobile`, `member_email`, `member_address`
 - **Ground Truth Usage**: Evaluation ONLY (post-processing validation)
 - **PII Types**: Names, phone numbers, emails, addresses, membership numbers
 
@@ -67,9 +65,10 @@ class PurePresidioFramework:
 
 **Capabilities**:
 - Built-in recognizers for standard PII types
-- Production-grade pattern recognition
-- Fast, deterministic processing
 - Australian localization for phones/addresses
+- Fast, deterministic processing
+- Low operational cost without third-party API fees
+- Minimized security risk via self-contained processing
 
 ### Version B: Presidio + Agentic Enhancement
 **Approach**: Hybrid system combining Presidio with intelligent AI agents
@@ -110,6 +109,49 @@ The following diagram illustrates the sequential and conditional logic of the ag
 ![Agentic PII Deidentification Pipeline](assets/images/agentic-pipeline-diagram.png)
 
 > **Note**: This diagram shows the decision flow where the Context Analyzer Agent determines processing complexity, leading to either standard or intensive PII detection modes across subsequent agents.
+
+## 📁 Project Structure
+
+```
+agentic-pii-deidentification/
+├── .data/
+│   └── synthetic_call_transcripts.csv
+├── config/
+│   └── deployment_config.yaml
+├── demo/
+│   ├── mlruns/
+│   ├── presidio_baseline_results.csv
+│   └── presidio_technical_diagnostics.ipynb
+├── experiments/
+│   └── mlflow_experiments/
+├── src/
+│   ├── agentic/
+│   │   ├── agents/
+│   │   └── orchestrator.py
+│   ├── baseline/
+│   │   └── presidio_framework.py
+│   ├── evaluation/
+│   │   ├── diagnostics.py
+│   │   └── metrics.py
+│   └── utils/
+│       ├── data_processing.py
+│       └── llm_provider.py
+├── tests/
+│   ├── test_data/
+│   │   ├── expected_results.json
+│   │   ├── simple_transcript.txt
+│   │   └── test_ground_truth.csv
+│   ├── conftest.py
+│   ├── run_tests.py
+│   ├── test_baseline.py
+│   └── test_pii_extraction.py
+├── .coverage
+├── .gitignore
+├── LICENSE
+├── pytest.ini
+├── ReadMe.md
+└── requirements_py311.txt
+```
 
 ## 📈 Scalability Architecture
 
@@ -225,54 +267,6 @@ config = {
 2. **Staging**: Databricks testing with scaled data
 3. **Production**: Automated deployment via MLflow Model Registry
 4. **Monitoring**: Real-time performance and cost tracking
-
-## 📁 Project Structure
-
-```
-agentic-pii-deidentification/
-├── .data/
-│   └── synthetic_call_transcripts.csv
-├── .dev/
-├── assets/
-│   └── images/
-│       └── agentic-pipeline-diagram.png
-├── config/
-│   └── deployment_config.yaml
-├── demo/
-│   ├── mlruns/
-│   ├── presidio_baseline_results.csv
-│   └── presidio_technical_diagnostics.ipynb
-├── experiments/
-│   └── mlflow_experiments/
-├── htmlcov/
-├── src/
-│   ├── agentic/
-│   │   ├── agents/
-│   │   └── orchestrator.py
-│   ├── baseline/
-│   │   └── presidio_framework.py
-│   ├── evaluation/
-│   │   ├── diagnostics.py
-│   │   └── metrics.py
-│   └── utils/
-│       ├── data_processing.py
-│       └── llm_provider.py
-├── tests/
-│   ├── test_data/
-│   │   ├── expected_results.json
-│   │   ├── simple_transcript.txt
-│   │   └── test_ground_truth.csv
-│   ├── conftest.py
-│   ├── run_tests.py
-│   ├── test_baseline.py
-│   └── test_pii_extraction.py
-├── .coverage
-├── .gitignore
-├── LICENSE
-├── pytest.ini
-├── ReadMe.md
-└── requirements_py311.txt
-```
 
 ## 🎯 Expected Outcomes
 
