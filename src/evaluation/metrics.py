@@ -603,7 +603,8 @@ class PIIEvaluator:
         print(f"   False Negatives: {overall['total_false_negatives']}")
         
         print(f"\n🔍 ENTITY TYPE BREAKDOWN:")
-        for entity_type, metrics in results['per_entity_type_metrics'].items():
+        sorted_entities = sorted(results['per_entity_type_metrics'].items(), key=lambda item: item[1]['recall'], reverse=True)
+        for entity_type, metrics in sorted_entities:
             print(f"   {entity_type:22} | P: {metrics['precision']:.3f} | R: {metrics['recall']:.3f} | F1: {metrics['f1_score']:.3f}")
         
         print(f"\n⚠️  ISSUES IDENTIFIED:")

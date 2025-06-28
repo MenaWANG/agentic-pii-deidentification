@@ -263,7 +263,9 @@ class PurePresidioFramework:
             # Log final metrics
             final_metrics = self._calculate_final_metrics(results_df, total_processing_time)
             print(f"\n✅ Processing complete! Final metrics:")
-            for metric, value in final_metrics.items():
+            # Print all metrics except the last two (which are wordy distributions)
+            metrics_to_print = list(final_metrics.items())[:-2]
+            for metric, value in metrics_to_print:
                 print(f"   {metric}: {value}")
             
             # Save results
