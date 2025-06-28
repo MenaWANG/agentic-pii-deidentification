@@ -246,7 +246,8 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     .cleaned-col {{ background-color: #f0f8ff; }}
     
     .missed-pii {{ background-color: #ffcccc; padding: 2px 4px; border-radius: 3px; }}
-    .detected-pii {{ background-color: #ccffcc; padding: 2px 4px; border-radius: 3px; }}
+    .detected-pii-tp {{ background-color: #ccffcc; padding: 2px 4px; border-radius: 3px; }}
+    .detected-pii-fp {{ background-color: #fff3cd; padding: 2px 4px; border-radius: 3px; border: 1px solid #ffc107; }}
     </style>
     
     <h3>{title}</h3>
@@ -308,15 +309,65 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
                     f'<span class="missed-pii">{html.escape(missed_text)}</span>'
                 )
         
-        # Create highlighted cleaned transcript (detected PII in green)
+        # Create highlighted cleaned transcript - distinguish TP vs FP
         highlighted_cleaned = html.escape(anonymized)
+        
+        # Create mapping of detected PII to their match types
+        detection_to_match_type = {}
+        for match in eval_result['matches']:
+            if match.detected_value:  # Only for actual detections (not missed)
+                detection_to_match_type[match.detected_value] = match.match_type
+        
+        # Enhanced placeholder list including custom recognizers
         placeholders = ['&lt;PERSON&gt;', '&lt;EMAIL_ADDRESS&gt;', '&lt;PHONE_NUMBER&gt;', 
-                       '&lt;LOCATION&gt;', '&lt;DATE_TIME&gt;', '&lt;US_SSN&gt;']
+                       '&lt;LOCATION&gt;', '&lt;DATE_TIME&gt;', '&lt;US_SSN&gt;', '&lt;MEMBER_NUMBER&gt;', '&lt;AU_ADDRESS&gt;']
+        
+        # Determine if each placeholder represents TP or FP
         for placeholder in placeholders:
-            highlighted_cleaned = highlighted_cleaned.replace(
-                placeholder,
-                f'<span class="detected-pii">{placeholder}</span>'
-            )
+            # Find corresponding detections for this placeholder type
+            placeholder_entity_type = placeholder.replace('&lt;', '').replace('&gt;', '')
+            
+            # Check if any detection of this type exists and what its match type is
+            is_true_positive = False
+            is_false_positive = False
+            
+            for detection in detected_pii:
+                if detection['entity_type'] == placeholder_entity_type:
+                    # Find the match type for this specific detection
+                    for match in eval_result['matches']:
+                        if (match.detected_type == detection['entity_type'] and 
+                            match.detected_value == detection['text']):
+                            if match.match_type in ['exact', 'partial']:
+                                is_true_positive = True
+                            elif match.match_type == 'over_detection':
+                                is_false_positive = True
+                            break
+            
+            # Apply highlighting based on classification
+            if is_true_positive and not is_false_positive:
+                # Pure True Positive - green
+                highlighted_cleaned = highlighted_cleaned.replace(
+                    placeholder,
+                    f'<span class="detected-pii-tp">{placeholder}</span>'
+                )
+            elif is_false_positive and not is_true_positive:
+                # Pure False Positive - yellow
+                highlighted_cleaned = highlighted_cleaned.replace(
+                    placeholder,
+                    f'<span class="detected-pii-fp">{placeholder}</span>'
+                )
+            elif is_true_positive and is_false_positive:
+                # Mixed case - default to TP (green) but could be improved
+                highlighted_cleaned = highlighted_cleaned.replace(
+                    placeholder,
+                    f'<span class="detected-pii-tp">{placeholder}</span>'
+                )
+            else:
+                # No matching detection found - default to TP styling
+                highlighted_cleaned = highlighted_cleaned.replace(
+                    placeholder,
+                    f'<span class="detected-pii-tp">{placeholder}</span>'
+                )
         
         # Performance status (adjusted for matching mode)
         recall_threshold = 0.90 if matching_mode == 'business' else 0.85  # business mode should achieve higher recall
@@ -478,11 +529,13 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
     
     # Print summary
     print(f"\n📊 MISSED PII SUMMARY:")
-    for category, count in sorted(missed_by_category.items(), key=lambda x: x[1], reverse=True):
+    # Sort by recall (1 - miss_rate) in ascending order to show worst performers first
+    for category, count in sorted(missed_by_category.items(), key=lambda x: 1 - improvement_insights[x[0]]['miss_rate']):
         total = improvement_insights[category]['total_occurrences']
         miss_rate = improvement_insights[category]['miss_rate']
+        recall = 1 - miss_rate
         priority = improvement_insights[category]['priority']
-        print(f"  {category:20} | Missed: {count:3d}/{total:3d} ({miss_rate:.1%}) | Priority: {priority}")
+        print(f"  {category:20} | Recall: {recall:.1%} | Missed: {count:3d}/{total:3d} | Priority: {priority}")
     
     return {
         'missed_by_category': missed_by_category,
