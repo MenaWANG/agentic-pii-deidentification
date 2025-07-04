@@ -44,6 +44,17 @@ A state-of-the-art framework for detecting and removing Personally Identifiable 
 
 ## 🏗️ Framework Architecture
 
+### 🧹 Text Normalisation Layer (Pre-processing)
+
+Real-world voice-to-text transcripts often spell out digits ("zero four zero two …") and replace email symbols ("at", "dot").  
+A lightweight, rule-based pre-processor converts these spoken forms into canonical digits and symbols **before** Presidio runs to improve recall while keeping costs low.
+
+Example transformation:
+```text
+"zero four one two three four five six seven" → "041234567"
+"john doe at gmail dot com" → "john.doe@gmail.com"
+```
+
 ### Version A: Presidio Baseline
 **Approach**: Pure Microsoft Presidio implementation 
 
@@ -53,6 +64,7 @@ from presidio_anonymizer import AnonymizerEngine
 
 class PurePresidioFramework:
     def __init__(self):
+        self.apply_normalisation=True
         self.analyzer = AnalyzerEngine()
         self.anonymizer = AnonymizerEngine()
     
@@ -74,19 +86,24 @@ class PurePresidioFramework:
 **Approach**: Hybrid system combining Presidio with intelligent AI agents
 
 ```python
-from langchain.agents import AgentExecutor, create_structured_chat_agent
+from langgraph.graph import StateGraph
+from baseline.presidio_framework import PurePresidioFramework
 
 class AgenticFramework:
     def __init__(self, llm_provider="databricks"):
-        self.presidio = PresidioAnonymizer()
+        # 1️⃣ Deterministic first-pass detector (Presidio baseline)
+        self.presidio = PurePresidioFramework(enable_mlflow=False)
+        # 2️⃣ LLM layer
         self.llm = self._get_llm(llm_provider)
-        self.agents = self._create_agents()
-    
-    @mlflow.langchain.autolog()
-    def process_with_agents(self, transcript, presidio_result):
-        # Multi-agent enhancement pipeline
-        enhanced_result = self.coordinate_agents(transcript, presidio_result)
-        return enhanced_result
+        # 3️⃣ Build orchestration DAG with LangGraph
+        self.graph = self._build_graph()
+
+    def process(self, transcript: str):
+        presidio_result = self.presidio.process_transcript(transcript)
+        # Pass both raw text and Presidio analysis into the graph-based agent pipeline
+        return self.graph.invoke(
+            {"transcript": transcript, "presidio_result": presidio_result}
+        )
 ```
 
 **Agent Architecture**:
@@ -135,7 +152,8 @@ agentic-pii-deidentification/
 │   │   └── metrics.py
 │   └── utils/
 │       ├── data_processing.py
-│       └── llm_provider.py
+│       ├── llm_provider.py      (existing)
+│       └── text_normaliser.py   (rule-based normaliser)
 ├── tests/
 │   ├── test_data/
 │   │   ├── expected_results.json
@@ -175,6 +193,7 @@ def process_large_dataset(table_name, batch_size=1000):
 - **Caching**: LLM response caching for similar patterns
 - **Async Processing**: Concurrent agent execution
 - **Auto-scaling**: Dynamic Databricks cluster scaling
+- **Spoken-form Normalisation**: Pre-processing step to convert spelled-out digits/emails for higher Presidio recall
 
 ## 📊 MLflow Monitoring & Evaluation
 
@@ -291,7 +310,7 @@ config = {
 ### Quick Start
 ```bash
 # Install dependencies
-pip install langchain langchain-experimental presidio-analyzer presidio-anonymizer mlflow
+pip install langchain langgraph langchain-experimental presidio-analyzer presidio-anonymizer mlflow
 
 # Run baseline framework
 python src/baseline/presidio_framework.py
