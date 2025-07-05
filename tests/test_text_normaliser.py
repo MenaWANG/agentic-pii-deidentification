@@ -20,7 +20,8 @@ if src_path not in sys.path:
 from utils.text_normaliser import (
     TextNormaliser,
     normalize_text,
-    normalize_spelled_letters,
+    normalize_separated_chars,
+    normalize_spelled_letters,  # Legacy function
     normalize_number_words,
     normalize_email_addresses
 )
@@ -50,85 +51,92 @@ class TestTextNormaliser:
         assert len(providers) > 10  # Should have many providers
 
 
-class TestSpelledLettersNormalization:
-    """Test spelled-out letter combination functionality."""
+class TestSeparatedCharsNormalization:
+    """Test separated characters combination functionality."""
     
     def setup_method(self):
         """Set up test fixtures."""
         self.normaliser = TextNormaliser()
     
-    def test_simple_spelled_letters(self):
-        """Test basic spelled-out letter combinations."""
-        # Basic cases
-        assert self.normaliser.normalize_spelled_letters("d o e") == "doe"
-        assert self.normaliser.normalize_spelled_letters("j o h n") == "john"
-        assert self.normaliser.normalize_spelled_letters("a b c") == "abc"
-    
-    def test_spelled_letters_with_context(self):
-        """Test spelled-out letters within sentences."""
-        text = "My name is j o h n and I live in s y d n e y"
-        expected = "My name is john and I live in sydney"
-        assert self.normaliser.normalize_spelled_letters(text) == expected
-    
-    def test_spelled_letters_various_lengths(self):
-        """Test different lengths of spelled-out sequences."""
-        # Two letters
-        assert self.normaliser.normalize_spelled_letters("a b") == "ab"
+    def test_simple_separated_chars(self):
+        """Test basic separated character combinations."""
+        # Basic cases - letters
+        assert self.normaliser.normalize_separated_chars("d o e") == "doe"
+        assert self.normaliser.normalize_separated_chars("j o h n") == "john"
+        assert self.normaliser.normalize_separated_chars("a b c") == "abc"
         
-        # Three letters
-        assert self.normaliser.normalize_spelled_letters("c a t") == "cat"
-        
-        # Four letters
-        assert self.normaliser.normalize_spelled_letters("j o h n") == "john"
-        
-        # Five letters
-        assert self.normaliser.normalize_spelled_letters("s m i t h") == "smith"
-        
-        # Six letters
-        assert self.normaliser.normalize_spelled_letters("w i l s o n") == "wilson"
+        # Basic cases - digits
+        assert self.normaliser.normalize_separated_chars("1 2 3") == "123"
+        assert self.normaliser.normalize_separated_chars("0 4 1 2") == "0412"
     
-    def test_spelled_letters_case_insensitive(self):
-        """Test case insensitive spelled-out letters."""
-        assert self.normaliser.normalize_spelled_letters("J O H N") == "JOHN"
-        assert self.normaliser.normalize_spelled_letters("j O h N") == "jOhN"
-        assert self.normaliser.normalize_spelled_letters("D o E") == "DoE"
+    def test_separated_chars_with_context(self):
+        """Test separated characters within sentences."""
+        text = "My name is j o h n d o e and I live in s y d n e y"
+        expected = "My name is johndoe and I live in sydney"
+        assert self.normaliser.normalize_separated_chars(text) == expected
     
-    def test_spelled_letters_with_punctuation(self):
-        """Test spelled-out letters with punctuation."""
+    def test_separated_chars_various_lengths(self):
+        """Test different lengths of separated sequences."""
+        # Two characters
+        assert self.normaliser.normalize_separated_chars("a b") == "ab"
+        assert self.normaliser.normalize_separated_chars("1 2") == "12"
+        
+        # Three characters
+        assert self.normaliser.normalize_separated_chars("c a t") == "cat"
+        assert self.normaliser.normalize_separated_chars("1 2 3") == "123"
+        
+        # Four characters
+        assert self.normaliser.normalize_separated_chars("j o h n") == "john"
+        assert self.normaliser.normalize_separated_chars("1 2 3 4") == "1234"
+        
+        # Longer sequences
+        assert self.normaliser.normalize_separated_chars("j o h n d o e") == "johndoe"
+        assert self.normaliser.normalize_separated_chars("1 2 3 4 5 6 7 8 9") == "123456789"
+    
+    def test_separated_chars_case_insensitive(self):
+        """Test case insensitive separated characters."""
+        assert self.normaliser.normalize_separated_chars("J O H N") == "JOHN"
+        assert self.normaliser.normalize_separated_chars("j O h N") == "jOhN"
+        assert self.normaliser.normalize_separated_chars("D o E") == "DoE"
+        assert self.normaliser.normalize_separated_chars("1 2 3") == "123"
+    
+    def test_separated_chars_with_punctuation(self):
+        """Test separated characters with punctuation."""
         text = "My surname is s m i t h, and my first name is j o h n."
         expected = "My surname is smith, and my first name is john."
-        assert self.normaliser.normalize_spelled_letters(text) == expected
+        assert self.normaliser.normalize_separated_chars(text) == expected
     
-    def test_spelled_letters_multiple_sequences(self):
-        """Test multiple spelled-out sequences in one text."""
+    def test_separated_chars_multiple_sequences(self):
+        """Test multiple separated sequences in one text."""
         text = "Hi, I'm j o h n d o e from s y d n e y"
-        expected = "Hi, I'm john doe from sydney"
-        assert self.normaliser.normalize_spelled_letters(text) == expected
+        expected = "Hi, I'm johndoe from sydney"
+        assert self.normaliser.normalize_separated_chars(text) == expected
     
-    def test_spelled_letters_no_change(self):
+    def test_separated_chars_no_change(self):
         """Test text that shouldn't be changed."""
         # Normal words should not be affected
         text = "This is a normal sentence with regular words."
-        assert self.normaliser.normalize_spelled_letters(text) == text
+        assert self.normaliser.normalize_separated_chars(text) == text
         
         # Single letters should not be affected
         text = "I have a grade of A in mathematics."
-        assert self.normaliser.normalize_spelled_letters(text) == text
+        assert self.normaliser.normalize_separated_chars(text) == text
     
-    def test_spelled_letters_edge_cases(self):
-        """Test edge cases for spelled-out letters."""
+    def test_separated_chars_edge_cases(self):
+        """Test edge cases for separated characters."""
         # Empty string
-        assert self.normaliser.normalize_spelled_letters("") == ""
+        assert self.normaliser.normalize_separated_chars("") == ""
         
         # Only spaces
-        assert self.normaliser.normalize_spelled_letters("   ") == "   "
+        assert self.normaliser.normalize_separated_chars("   ") == "   "
         
         # Single letter
-        assert self.normaliser.normalize_spelled_letters("a") == "a"
+        assert self.normaliser.normalize_separated_chars("a") == "a"
         
-        # Non-alphabetic characters
-        text = "My number is 1 2 3 4"
-        assert self.normaliser.normalize_spelled_letters(text) == text
+        # Mixed letters and numbers
+        text = "My ID is a 1 b 2 c 3"
+        expected = "My ID is a1b2c3"
+        assert self.normaliser.normalize_separated_chars(text) == expected
 
 
 class TestNumberWordsNormalization:
@@ -236,11 +244,11 @@ class TestEmailAddressNormalization:
     def test_email_with_multiple_names(self):
         """Test email addresses with multiple name parts."""
         text = "john michael smith at gmail dot com"
-        expected = "john.michael.smith@gmail.com"
+        expected = "john michael.smith@gmail.com"
         assert self.normaliser.normalize_email_addresses(text) == expected
         
         text = "mary jane watson at hotmail dot com"
-        expected = "mary.jane.watson@hotmail.com"
+        expected = "mary jane.watson@hotmail.com"
         assert self.normaliser.normalize_email_addresses(text) == expected
     
     def test_email_case_insensitive(self):
@@ -262,6 +270,10 @@ class TestEmailAddressNormalization:
         text = "My email is mary smith at hotmail dot com and my phone is 123456789"
         expected = "My email is mary.smith@hotmail.com and my phone is 123456789"
         assert self.normaliser.normalize_email_addresses(text) == expected
+        
+        text = "Send it to john doe at gmail dot com"
+        expected = "Send it to john.doe@gmail.com"
+        assert self.normaliser.normalize_email_addresses(text) == expected
     
     def test_email_provider_aliases(self):
         """Test email provider aliases."""
@@ -282,8 +294,12 @@ class TestEmailAddressNormalization:
     
     def test_email_multiple_addresses(self):
         """Test multiple email addresses in one text."""
-        text = "Contact john doe at gmail dot com or mary smith at hotmail dot com"
-        expected = "Contact john.doe@gmail.com or mary.smith@hotmail.com"
+        text = "Contact us at john doe at gmail dot com or mary smith at hotmail dot com"
+        expected = "Contact us at john.doe@gmail.com or mary.smith@hotmail.com"
+        assert self.normaliser.normalize_email_addresses(text) == expected
+        
+        text = "Send to john doe at gmail dot com or mary smith at hotmail dot com"
+        expected = "Send to john.doe@gmail.com or mary.smith@hotmail.com"
         assert self.normaliser.normalize_email_addresses(text) == expected
     
     def test_email_no_change(self):
@@ -310,6 +326,31 @@ class TestEmailAddressNormalization:
         
         text = "john dot com"  # Missing "at gmail"
         assert self.normaliser.normalize_email_addresses(text) == text
+    
+    def test_configurable_username_words(self):
+        """Test configurable number of username words."""
+        # Test with 1 word
+        normaliser1 = TextNormaliser(email_username_words=1)
+        text = "Contact me at john doe at gmail dot com"
+        expected = "Contact me at john doe@gmail.com"
+        assert normaliser1.normalize_email_addresses(text) == expected
+        
+        # Test with 2 words (default)
+        normaliser2 = TextNormaliser(email_username_words=2)
+        text = "Contact me at john doe at gmail dot com"
+        expected = "Contact me at john.doe@gmail.com"
+        assert normaliser2.normalize_email_addresses(text) == expected
+        
+        # Test with 3 words
+        normaliser3 = TextNormaliser(email_username_words=3)
+        text = "Contact me at john michael doe at gmail dot com"
+        expected = "Contact me at john.michael.doe@gmail.com"
+        assert normaliser3.normalize_email_addresses(text) == expected
+        
+        # Test convenience function with parameter
+        text = "Contact me at john doe smith at gmail dot com"
+        result = normalize_email_addresses(text, email_username_words=3)
+        assert result == "Contact me at john.doe.smith@gmail.com"
 
 
 class TestIntegratedNormalization:
@@ -321,13 +362,13 @@ class TestIntegratedNormalization:
     
     def test_normalize_text_all_features(self):
         """Test full normalization with all features."""
-        text = "Hi, I'm j o h n d o e, my phone is zero four one two three four five six seven and email is john doe at gmail dot com"
-        expected = "Hi, I'm john doe, my phone is 041234567 and email is john.doe@gmail.com"
+        text = "Hi, I'm j o h n d o e, my phone is zero four one two three four five six seven and my address is john doe at gmail dot com"
+        expected = "Hi, I'm johndoe, my phone is 041234567 and my address is john.doe@gmail.com"
         assert self.normaliser.normalize_text(text) == expected
     
     def test_normalize_text_partial_features(self):
         """Test normalization with only some features present."""
-        # Only spelled letters
+        # Only separated characters
         text = "My name is j o h n"
         expected = "My name is john"
         assert self.normaliser.normalize_text(text) == expected
@@ -337,9 +378,14 @@ class TestIntegratedNormalization:
         expected = "Call me at 0412"
         assert self.normaliser.normalize_text(text) == expected
         
-        # Only email
-        text = "Email me at john at gmail dot com"
-        expected = "Email me at john@gmail.com"
+        # Only email (should be converted with single username word)
+        text = "Email me at john doe at gmail dot com"
+        expected = "Email me at john.doe@gmail.com"
+        assert self.normaliser.normalize_text(text) == expected
+        
+        # Email with two username words (should be converted)
+        text = "Send to john doe at gmail dot com"
+        expected = "Send to john.doe@gmail.com"
         assert self.normaliser.normalize_text(text) == expected
     
     def test_normalize_text_complex_scenario(self):
@@ -347,14 +393,14 @@ class TestIntegratedNormalization:
         text = """
         Hello, this is j o h n s m i t h from customer service.
         Your membership number is nine five nine two four six one seven.
-        We can be reached at support team at company dot com.
+        Send inquiries to support team at company dot com.
         For urgent matters, call us at zero four one six four eight nine nine six three seven four.
         """
         
         result = self.normaliser.normalize_text(text)
         
         # Check that all transformations were applied
-        assert "john smith" in result.lower()
+        assert "johnsmith" in result.lower()
         assert "95924617" in result
         assert "support.team@company.com" in result
         assert "041648996374" in result
@@ -389,11 +435,17 @@ class TestConvenienceFunctions:
         assert "john" in result
         assert "0123" in result
     
+    def test_normalize_separated_chars_function(self):
+        """Test the standalone normalize_separated_chars function."""
+        text = "My name is j o h n d o e"
+        result = normalize_separated_chars(text)
+        assert result == "My name is johndoe"
+    
     def test_normalize_spelled_letters_function(self):
-        """Test the standalone normalize_spelled_letters function."""
+        """Test the standalone normalize_spelled_letters function (legacy)."""
         text = "My name is j o h n d o e"
         result = normalize_spelled_letters(text)
-        assert result == "My name is john doe"
+        assert result == "My name is johndoe"
     
     def test_normalize_number_words_function(self):
         """Test the standalone normalize_number_words function."""
@@ -406,6 +458,10 @@ class TestConvenienceFunctions:
         text = "Contact me at john doe at gmail dot com"
         result = normalize_email_addresses(text)
         assert result == "Contact me at john.doe@gmail.com"
+        
+        text = "Send to john doe at gmail dot com"
+        result = normalize_email_addresses(text)
+        assert result == "Send to john.doe@gmail.com"
 
 
 class TestRealWorldScenarios:
@@ -423,23 +479,23 @@ class TestRealWorldScenarios:
         Agent: And your phone number?
         Customer: It's zero four one two three four five six seven eight.
         Agent: What's your email address?
-        Customer: It's john doe at gmail dot com.
+        Customer: john doe at gmail dot com.
         Agent: Thank you for confirming your details.
         """
         
         result = self.normaliser.normalize_text(transcript)
         
         # Verify all normalizations were applied
-        assert "john doe" in result.lower()
+        assert "johndoe" in result.lower()
         assert "04123456789" in result
         assert "john.doe@gmail.com" in result
     
     def test_mixed_content_scenario(self):
         """Test mixed content with various patterns."""
-        text = "Customer ID: a b c one two three, Email: support at company dot net, Phone: zero four one two"
+        text = "Customer ID: a b c one two three, Send to support at company dot net, Phone: zero four one two"
         result = self.normaliser.normalize_text(text)
         
-        assert "abc123" in result
+        assert "abc123" in result  # abc and 123 are separate sequences
         assert "support@company.net" in result
         assert "0412" in result
     
@@ -453,10 +509,12 @@ class TestRealWorldScenarios:
     
     def test_boundary_conditions(self):
         """Test boundary conditions and special cases."""
-        # Very long spelled-out sequence
+        # Long separated sequence (limited to 2-4 chars per sequence)
         text = "a b c d e f g h i j k l m n o p q r s t u v w x y z"
-        result = self.normaliser.normalize_spelled_letters(text)
-        assert result == "abcdefghijklmnopqrstuvwxyz"
+        result = self.normaliser.normalize_separated_chars(text)
+        # Should combine in groups of max 4: "abcd efgh ijkl mnop qrst uvwx yz"
+        assert "abcd" in result
+        assert "efgh" in result
         
         # Very long number sequence
         text = "zero one two three four five six seven eight nine"
@@ -489,7 +547,7 @@ class TestPerformance:
         # Should complete without errors
         result = self.normaliser.normalize_text(large_text)
         assert len(result) > 0
-        assert "john doe" in result
+        assert "johndoe" in result
         assert "0123" in result
     
     def test_pattern_compilation(self):

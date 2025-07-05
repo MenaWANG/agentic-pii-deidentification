@@ -22,14 +22,25 @@ class TextNormaliser:
     """
     Rule-based text normaliser for converting spoken forms to canonical text.
     
-    This class implements three main normalization capabilities:
-    - Spelled-out letter combination
-    - Number word to digit conversion
-    - Email address reconstruction from spoken form
+    This class implements normalization capabilities using a two-step approach:
+    1. Convert spelled-out numbers to digits (keeping spaces)
+    2. Combine separated characters/numbers (letters or digits)
+    3. Reconstruct email addresses from spoken form
+    
+    Examples:
+    - "my number is zero four one two" → "my number is 0412"
+    - "my member id is a b c one two three" → "my member id is abc123"
+    - "my email address is john doe at gmail dot com" → "my email address is john.doe@gmail.com"
     """
     
-    def __init__(self):
-        """Initialize the text normaliser with predefined mappings."""
+    def __init__(self, email_username_words=2):
+        """
+        Initialize the text normaliser with predefined mappings.
+        
+        Args:
+            email_username_words: Number of words before 'at' to consider as email username (default: 2)
+        """
+        self.email_username_words = email_username_words
         self.number_words = {
             'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
             'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
@@ -63,15 +74,10 @@ class TextNormaliser:
     
     def _compile_patterns(self):
         """Compile regex patterns for efficient matching."""
-        # Pattern for spelled-out letters (e.g., " d o e " or "d o e")
-        self.spelled_letters_pattern = re.compile(
-            r'\b([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\b|\b([a-zA-Z])\s+([a-zA-Z])\b|\b([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\b|\b([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\b|\b([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\s+([a-zA-Z])\b',
-            re.IGNORECASE
-        )
-        
-        # More flexible pattern for any sequence of single letters separated by spaces
-        self.flexible_letters_pattern = re.compile(
-            r'\b([a-zA-Z])(?:\s+([a-zA-Z]))+\b',
+        # Pattern for sequences of single characters (letters or digits) separated by spaces
+        # Simple pattern that matches sequences like "j o h n" or "1 2 3"
+        self.separated_chars_pattern = re.compile(
+            r'\b([a-zA-Z0-9](?:\s+[a-zA-Z0-9])+)\b',
             re.IGNORECASE
         )
         
@@ -83,41 +89,36 @@ class TextNormaliser:
         )
         
         # Pattern for email addresses in spoken form
-        # Matches patterns like "john doe at gmail dot com" or "user at domain dot extension"
+        # Matches username (1-4 words) + "at" + provider + "dot" + extension
         self.email_pattern = re.compile(
-            r'\b([a-zA-Z0-9._-]+(?:\s+[a-zA-Z0-9._-]+)*)\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+)*)\s+dot\s+([a-zA-Z]{2,})\b',
+            r'([a-zA-Z][a-zA-Z0-9._-]*(?:\s+[a-zA-Z0-9._-]+){0,3})\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+)*)\s+dot\s+([a-zA-Z]{2,})\b',
             re.IGNORECASE
         )
     
-    def normalize_spelled_letters(self, text: str) -> str:
+    def normalize_separated_chars(self, text: str) -> str:
         """
-        Combine spelled-out letters into words.
+        Combine separated characters (letters or digits) into continuous sequences.
         
-        Example: " d o e " → " doe "
+        Example: "j o h n d o e" → "johndoe", "1 2 3" → "123"
         
         Args:
-            text: Input text containing spelled-out letters
+            text: Input text containing separated characters
             
         Returns:
-            Text with spelled-out letters combined into words
+            Text with separated characters combined
         """
-        def replace_letters(match):
-            # Extract all non-None groups (letters)
-            letters = [g for g in match.groups() if g is not None]
-            return ''.join(letters)
-        
-        # Use the flexible pattern to match any sequence of single letters
-        def replace_flexible(match):
-            full_match = match.group(0)
+        def replace_separated(match):
+            full_match = match.group(1)  # Get the captured group
             # Split by spaces and join without spaces
-            letters = full_match.split()
-            return ''.join(letters)
+            chars = full_match.split()
+            combined = ''.join(chars)
+            return combined
         
-        # Apply the flexible pattern
-        normalized = self.flexible_letters_pattern.sub(replace_flexible, text)
+        # Apply the pattern to combine separated characters
+        result = self.separated_chars_pattern.sub(replace_separated, text)
         
-        logger.debug(f"Spelled letters normalization: '{text}' → '{normalized}'")
-        return normalized
+        logger.debug(f"Separated chars normalization: '{text}' → '{result}'")
+        return result
     
     def normalize_number_words(self, text: str) -> str:
         """
@@ -146,7 +147,11 @@ class TextNormaliser:
         """
         Convert spoken email addresses to proper format.
         
-        Example: "john doe at gmail dot com" → "john.doe@gmail.com"
+        Takes the last N words before "at" as the username (configurable, default=2).
+        
+        Examples:
+        - "my email is john doe at gmail dot com" → "my email is john.doe@gmail.com"
+        - "contact mary smith at hotmail dot com" → "contact mary.smith@hotmail.com"
         
         Args:
             text: Input text containing spoken email addresses
@@ -154,16 +159,39 @@ class TextNormaliser:
         Returns:
             Text with email addresses converted to proper format
         """
-        def replace_email(match):
-            username_part = match.group(1).strip()
+        # Find email patterns: (provider) dot (extension)
+        email_pattern = re.compile(
+            r'(\w+(?:\s+\w+)*)\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+)*)\s+dot\s+([a-zA-Z]{2,})\b',
+            re.IGNORECASE
+        )
+        
+        result = text
+        offset = 0
+        
+        # Process all matches from end to beginning to avoid offset issues
+        matches = list(email_pattern.finditer(text))
+        
+        for match in reversed(matches):
+            before_at_captured = match.group(1).strip()
             domain_part = match.group(2).strip()
             extension = match.group(3).strip()
             
-            # Normalize username: replace spaces with dots, remove extra spaces
-            username = re.sub(r'\s+', '.', username_part.strip())
+            # Split the captured text before "at" into words
+            words = before_at_captured.split()
+            
+            # Take the last N words as the username
+            if len(words) >= self.email_username_words:
+                username_words = words[-self.email_username_words:]
+                remaining_words = words[:-self.email_username_words]
+            else:
+                username_words = words
+                remaining_words = []
+            
+            # Create username by joining with dots
+            username = '.'.join(username_words)
             
             # Normalize domain: remove spaces, check if it's a known provider
-            domain = re.sub(r'\s+', '', domain_part.strip().lower())
+            domain = re.sub(r'\s+', '', domain_part.lower())
             
             # Check if domain is a known provider (without extension)
             if domain in self.email_providers:
@@ -173,16 +201,27 @@ class TextNormaliser:
                 # Construct domain with provided extension
                 full_domain = f"{domain}.{extension.lower()}"
             
-            return f"{username}@{full_domain}"
+            # Construct the replacement
+            email = f"{username}@{full_domain}"
+            if remaining_words:
+                replacement = f"{' '.join(remaining_words)} {email}"
+            else:
+                replacement = email
+            
+            # Replace in the result string
+            result = result[:match.start()] + replacement + result[match.end():]
         
-        normalized = self.email_pattern.sub(replace_email, text)
-        
-        logger.debug(f"Email normalization: '{text}' → '{normalized}'")
-        return normalized
+        logger.debug(f"Email normalization: '{text}' → '{result}'")
+        return result
     
     def normalize_text(self, text: str) -> str:
         """
         Apply all normalization rules to the input text.
+        
+        Uses a two-step approach:
+        1. First convert spelled-out numbers to digits (keeping spaces)
+        2. Then combine separated characters/numbers
+        3. Finally normalize email addresses
         
         Args:
             text: Input text to normalize
@@ -193,14 +232,13 @@ class TextNormaliser:
         if not text or not isinstance(text, str):
             return text
         
-        # Apply normalizations in order
-        # 1. First normalize spelled letters
-        normalized = self.normalize_spelled_letters(text)
+        # Step 1: Convert spelled-out numbers to digits (keeping spaces)
+        normalized = self.normalize_number_words(text)
         
-        # 2. Then normalize number words
-        normalized = self.normalize_number_words(normalized)
+        # Step 2: Combine separated characters/numbers
+        normalized = self.normalize_separated_chars(normalized)
         
-        # 3. Finally normalize email addresses
+        # Step 3: Normalize email addresses
         normalized = self.normalize_email_addresses(normalized)
         
         logger.info(f"Full normalization: '{text}' → '{normalized}'")
@@ -217,32 +255,33 @@ class TextNormaliser:
 
 
 # Convenience functions for direct usage
-def normalize_text(text: str) -> str:
+def normalize_text(text: str, email_username_words: int = 2) -> str:
     """
     Convenience function to normalize text using default normaliser.
     
     Args:
         text: Input text to normalize
+        email_username_words: Number of words before 'at' to consider as email username
         
     Returns:
         Normalized text
     """
-    normaliser = TextNormaliser()
+    normaliser = TextNormaliser(email_username_words=email_username_words)
     return normaliser.normalize_text(text)
 
 
-def normalize_spelled_letters(text: str) -> str:
+def normalize_separated_chars(text: str) -> str:
     """
-    Convenience function to normalize only spelled-out letters.
+    Convenience function to normalize only separated characters.
     
     Args:
-        text: Input text containing spelled-out letters
+        text: Input text containing separated characters
         
     Returns:
-        Text with spelled-out letters combined
+        Text with separated characters combined
     """
     normaliser = TextNormaliser()
-    return normaliser.normalize_spelled_letters(text)
+    return normaliser.normalize_separated_chars(text)
 
 
 def normalize_number_words(text: str) -> str:
@@ -259,15 +298,31 @@ def normalize_number_words(text: str) -> str:
     return normaliser.normalize_number_words(text)
 
 
-def normalize_email_addresses(text: str) -> str:
+def normalize_email_addresses(text: str, email_username_words: int = 2) -> str:
     """
     Convenience function to normalize only email addresses.
     
     Args:
         text: Input text containing spoken email addresses
+        email_username_words: Number of words before 'at' to consider as email username
         
     Returns:
         Text with email addresses converted to proper format
     """
-    normaliser = TextNormaliser()
-    return normaliser.normalize_email_addresses(text) 
+    normaliser = TextNormaliser(email_username_words=email_username_words)
+    return normaliser.normalize_email_addresses(text)
+
+
+# Legacy function for backward compatibility
+def normalize_spelled_letters(text: str) -> str:
+    """
+    Legacy function for backward compatibility.
+    Now uses normalize_separated_chars internally.
+    
+    Args:
+        text: Input text containing separated characters
+        
+    Returns:
+        Text with separated characters combined
+    """
+    return normalize_separated_chars(text) 
