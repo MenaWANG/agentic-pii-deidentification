@@ -1,7 +1,7 @@
 """
 Modern pytest-based test runner for PII deidentification framework.
 """
-import subprocess
+import pytest
 import sys
 from pathlib import Path
 
@@ -15,31 +15,28 @@ def run_pytest_tests():
     project_root = Path(__file__).parent.parent
     
     try:
-        # Run pytest with coverage and proper configuration
-        result = subprocess.run([
-            sys.executable, "-m", "pytest",
+        # Run pytest directly using pytest.main()
+        args = [
             "-v",                    # Verbose output
             "--tb=short",           # Short traceback format
             "--cov=src",            # Coverage for src directory
             "--cov-report=term-missing",  # Show missing lines
             "--cov-report=html",    # Generate HTML coverage report
-            "tests/",               # Test directory
-        ], 
-        cwd=project_root,
-        capture_output=False,  # Show output in real-time
-        text=True
-        )
+            str(project_root / "tests/"),  # Test directory
+        ]
+        
+        result = pytest.main(args)
         
         print("\n" + "=" * 60)
-        if result.returncode == 0:
+        if result == 0:
             print("🎉 ALL TESTS PASSED! 🎉")
             print("📊 Coverage report generated in htmlcov/index.html")
         else:
             print("💥 SOME TESTS FAILED!")
             
-        return result.returncode == 0
+        return result == 0
         
-    except FileNotFoundError:
+    except ImportError:
         print("❌ pytest not found. Please install with: pip install pytest pytest-cov")
         return False
     except Exception as e:
@@ -54,18 +51,14 @@ def run_specific_markers(marker):
     print(f"🧪 Running tests with marker: {marker}")
     
     try:
-        result = subprocess.run([
-            sys.executable, "-m", "pytest",
+        args = [
             "-v",
             "-m", marker,
-            "tests/",
-        ], 
-        cwd=project_root,
-        capture_output=False,
-        text=True
-        )
+            str(project_root / "tests/"),
+        ]
         
-        return result.returncode == 0
+        result = pytest.main(args)
+        return result == 0
         
     except Exception as e:
         print(f"❌ Error running tests: {e}")
