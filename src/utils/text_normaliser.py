@@ -66,7 +66,8 @@ class TextNormaliser:
             'gmx': 'gmx.com',
             'fastmail': 'fastmail.com',
             'me': 'me.com',
-            'mac': 'mac.com'
+            'mac': 'mac.com',
+            'qq': 'qq.com'
         }
         
         # Patterns for different normalizations
@@ -159,14 +160,16 @@ class TextNormaliser:
         Returns:
             Text with email addresses converted to proper format
         """
-        # Find email patterns: (provider) dot (extension)
+        # Find email patterns: (username words) at (provider) dot (extension)
+        # Use a restrictive pattern that limits both username and domain parts
+        # to avoid matching across multiple emails
+        max_username_words = max(self.email_username_words + 1, 4)  # Allow some flexibility
         email_pattern = re.compile(
-            r'(\w+(?:\s+\w+)*)\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+)*)\s+dot\s+([a-zA-Z]{2,})\b',
+            rf'(?<!\w)(\w+(?:\s+\w+){{0,{max_username_words-1}}})\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+){{0,2}})\s+dot\s+([a-zA-Z]{{2,}})\b(?!\s+\w+\s+at)',
             re.IGNORECASE
         )
         
         result = text
-        offset = 0
         
         # Process all matches from end to beginning to avoid offset issues
         matches = list(email_pattern.finditer(text))
