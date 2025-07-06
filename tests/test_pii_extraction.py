@@ -2,7 +2,7 @@
 Tests for PII extraction functionality.
 """
 import pytest
-from evaluation.metrics import PIIEvaluator
+from evaluation.metrics import PIIEvaluator, PIIMatch
 
 
 @pytest.mark.unit
@@ -94,27 +94,31 @@ class TestPIIExtraction:
     
     def test_pii_protection_rate_calculation(self):
         """Test character-based PII protection rate calculation."""
-        # Mock matches covering some PII characters
-        matches = [
-            type('MockMatch', (), {
-                'match_type': 'exact',
-                'start_pos': 427,
-                'end_pos': 431  # Covers "Ella" (4 chars)
-            })(),
-            type('MockMatch', (), {
-                'match_type': 'partial', 
-                'start_pos': 500,
-                'end_pos': 505  # Covers 5 more chars
-            })()
+        # Create detected PII entries
+        detected_pii = [
+            {
+                'text': 'Ella',
+                'entity_type': 'PERSON',
+                'start': 427,
+                'end': 431,
+                'score': 0.95
+            },
+            {
+                'text': 'Wilson',
+                'entity_type': 'PERSON',
+                'start': 500,
+                'end': 505,
+                'score': 0.90
+            }
         ]
         
         # Ground truth PII covering 10 total characters
         ground_truth_pii = [
-            {'start': 427, 'end': 431},  # 4 chars
-            {'start': 500, 'end': 506}   # 6 chars
+            {'value': 'Ella', 'type': 'member_first_name', 'start': 427, 'end': 431},  # 4 chars
+            {'value': 'Wilson', 'type': 'member_last_name', 'start': 500, 'end': 506}   # 6 chars
         ]
         
-        protection_rate = self.evaluator._calculate_pii_protection_rate(matches, ground_truth_pii)
+        protection_rate = self.evaluator._calculate_pii_protection_rate(detected_pii, ground_truth_pii)
         
         # Should protect 9 out of 10 characters = 0.9
         expected_rate = 9 / 10  # 4 + 5 protected out of 4 + 6 total
@@ -201,25 +205,25 @@ class TestPIIExtraction:
         assert abs(metrics['raw_recall'] -  expected_raw_recall) < 0.01
     
     def test_pii_protection_rate_calculation_duplicated_positions(self):
-        """Test character-based PII protection rate calculation."""
-        # Mock matches covering some PII characters
-        matches = [
-            type('MockMatch', (), {
-                'match_type': 'partial', 
-                'start_pos': 0,
-                'end_pos': 6  
-            })()
+        """Test character-based PII protection rate calculation using detected spans."""
+        
+        # Detected PII covers only the first 6 characters
+        detected_pii = [
+            {'text': 'Amelia', 'entity_type': 'PERSON', 'start': 0, 'end': 6}
         ]
         
-        # Ground truth PII covering 10 total characters
+        # Ground truth includes overlapping spans: 0–6 and 0–10
         ground_truth_pii = [
-            {'start': 0, 'end': 6},  # first name
-            {'start': 0, 'end': 10}   # full name
+            {'start': 0, 'end': 6},   # First name
+            {'start': 0, 'end': 10}   # Full name
         ]
         
-        protection_rate = self.evaluator._calculate_pii_protection_rate(matches, ground_truth_pii)
+        # Instantiate evaluator and run protection rate calculation
+        protection_rate = self.evaluator._calculate_pii_protection_rate(detected_pii, ground_truth_pii)
         
-        # Should identify unique positions only, hence 6 out of 10 characters = 0.6
-        expected_rate = 6 / 10  
+        # Total unique ground truth characters = positions 0–9 (i.e., 10 chars)
+        # Detected coverage = positions 0–5 (i.e., 6 chars)
+        expected_rate = 6 / 10
+        
         assert abs(protection_rate - expected_rate) < 0.01, \
-            "PII protection rate should be calculated correctly"
+            f"Expected protection rate {expected_rate:.2f}, got {protection_rate:.2f}"

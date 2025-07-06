@@ -427,7 +427,7 @@ class PIIEvaluator:
         f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
         
         # Calculate character-based PII protection rate
-        pii_protection_rate = self._calculate_pii_protection_rate(matches, ground_truth_pii)
+        pii_protection_rate = self._calculate_pii_protection_rate(detected_pii, ground_truth_pii)
         
         return {
             'exact_matches': exact_matches,
@@ -447,29 +447,38 @@ class PIIEvaluator:
             'matches': matches
         }
     
-    def _calculate_pii_protection_rate(self, matches: List[PIIMatch], ground_truth_pii: List[Dict]) -> float:
-        """Calculate what percentage of PII characters are actually protected."""
+    def _calculate_pii_protection_rate(self, detected_pii: List[Dict], ground_truth_pii: List[Dict]) -> float:
+        """
+        Calculate what percentage of ground truth PII characters are protected,
+        based on detected PII spans (e.g., from an NER model).
+        
+        Parameters:
+            detected_pii (List[Dict]): List of detected PII entities with 'start' and 'end'.
+            ground_truth_pii (List[Dict]): List of ground truth PII spans with 'start' and 'end'.
+            
+        Returns:
+            float: Protection rate as a proportion of covered ground truth PII characters.
+        """
         if not ground_truth_pii:
             return 0.0
-        
-        # Get all unique character positions that contain PII
+
+        # Build character position sets
         all_pii_positions = set()
-        for gt_item in ground_truth_pii:
-            for pos in range(gt_item['start'], gt_item['end']):
-                all_pii_positions.add(pos)
-        
-        # Get all character positions that are protected (matched)
-        protected_positions = set()
-        for match in matches:
-            if match.match_type in ['exact', 'partial']:
-                for pos in range(match.start_pos, match.end_pos):
-                    protected_positions.add(pos)
-        
-        # Calculate protection rate
+        for pii in ground_truth_pii:
+            all_pii_positions.update(range(pii['start'], pii['end']))
+
+        detected_positions = set()
+        for pii in detected_pii:
+            detected_positions.update(range(pii['start'], pii['end']))
+
+        # Compute intersection
+        protected_positions = all_pii_positions.intersection(detected_positions)
+
         total_pii_chars = len(all_pii_positions)
-        protected_pii_chars = len(protected_positions.intersection(all_pii_positions))
-        
-        return protected_pii_chars / total_pii_chars if total_pii_chars > 0 else 0.0
+        protected_chars = len(protected_positions)
+
+        return protected_chars / total_pii_chars if total_pii_chars > 0 else 0.0
+
     
     def _calculate_overall_metrics(self, per_transcript_metrics: List[Dict]) -> Dict:
         """Calculate overall metrics across all transcripts."""

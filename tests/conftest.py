@@ -9,9 +9,12 @@ import os
 from pathlib import Path
 from typing import Dict, List
 import sys
+import tempfile
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add src to path for imports in a more secure way
+src_path = str(Path(__file__).parent.parent / 'src')
+if src_path not in sys.path:
+    sys.path.append(src_path)
 
 
 @pytest.fixture(scope="session")
@@ -116,11 +119,19 @@ def sample_csv_data():
 
 
 @pytest.fixture
-def temp_csv_file(tmp_path, sample_csv_data):
-    """Create a temporary CSV file for testing."""
-    csv_path = tmp_path / "test_data.csv"
-    sample_csv_data.to_csv(csv_path, index=False)
-    return str(csv_path)
+def temp_csv_file(sample_csv_data):
+    """Create a temporary CSV file for testing using a secure temporary file."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+        sample_csv_data.to_csv(temp_file.name, index=False)
+        temp_path = temp_file.name
+    
+    yield temp_path
+    
+    # Clean up the temporary file after the test
+    try:
+        os.unlink(temp_path)
+    except (OSError, PermissionError):
+        pass  # Ignore cleanup errors
 
 
 # Test markers setup
