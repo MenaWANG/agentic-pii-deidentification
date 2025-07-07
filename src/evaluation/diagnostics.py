@@ -832,3 +832,92 @@ def test_transcript_counting():
     )
     
     return debug_result 
+
+def create_three_stage_html_table(
+    transcript_data: List[Dict],
+    title: str = "Three-Stage Workflow Analysis",
+    description: str = "",
+    matching_mode: str = 'business',
+    show_original: bool = True
+) -> str:
+    """
+    Create a diagnostic HTML table for the three-stage workflow.
+    
+    This function is a wrapper around create_diagnostic_html_table_configurable
+    that adapts the data for three-stage workflow display.
+    
+    Args:
+        transcript_data: List of transcript data dictionaries (must include 'stage_a_original', 'stage_b_normalized', 'stage_c_cleaned')
+        title: Title for the analysis table
+        description: Description text to display
+        matching_mode: 'business' (default) or 'research'
+        show_original: Whether to show the original transcript column
+        
+    Returns:
+        HTML string for display in notebooks
+    """
+    
+    # Adapt the data to work with the existing configurable function
+    adapted_data = []
+    
+    for data in transcript_data:
+        # Create adapted data structure that matches what create_diagnostic_html_table_configurable expects
+        adapted_item = {
+            'call_id': data['call_id'],
+            # Use normalized transcript as the "original" for evaluation (since that's what we evaluate against)
+            'original': data.get('stage_b_normalized', ''),
+            # Use cleaned transcript as the "anonymized" 
+            'anonymized': data.get('stage_c_cleaned', ''),
+            # Keep the same PII detections
+            'detected_pii': data.get('pii_detections', data.get('detected_pii', [])),
+            # Keep all ground truth fields
+            'member_first_name': data['member_first_name'],
+            'member_full_name': data['member_full_name'],
+            'member_email': data['member_email'],
+            'member_mobile': data['member_mobile'],
+            'member_address': data['member_address'],
+            'member_number': data['member_number'],
+            'consultant_first_name': data['consultant_first_name']
+        }
+        adapted_data.append(adapted_item)
+    
+    # Call the existing function with adapted data
+    base_html = create_diagnostic_html_table_configurable(
+        transcript_data=adapted_data,
+        title=title,
+        description=description,
+        matching_mode=matching_mode
+    )
+    
+    # If we need to show the original transcript, we need to modify the HTML
+    if show_original:
+        # Replace the table header to include original column
+        base_html = base_html.replace(
+            '<th style="width: 25%;">📊 Metrics & Performance</th>',
+            '<th style="width: 20%;">📊 Metrics & Performance</th>'
+        )
+        base_html = base_html.replace(
+            '<th style="width: 37.5%;">📋 Original Transcript</th>',
+            '<th style="width: 20%;">📋 Original Transcript</th>'
+        )
+        base_html = base_html.replace(
+            '<th style="width: 37.5%;">🛡️ Cleaned Transcript</th>',
+            '<th style="width: 30%;">🔄 Normalized Transcript</th><th style="width: 30%;">🛡️ Cleaned Transcript</th>'
+        )
+        
+        # Add original transcript column to each row
+        for data in transcript_data:
+            call_id = data['call_id']
+            original_text = data.get('stage_a_original', '')
+            
+            # Find the row for this call_id and insert the original transcript
+            # This is a simple replacement - in a more complex scenario, we might need more sophisticated HTML parsing
+            row_start = base_html.find(f'<td class="metrics-col">')
+            if row_start != -1:
+                # Find the end of the metrics column
+                metrics_end = base_html.find('</td>', row_start) + 5
+                # Insert original transcript column after metrics
+                original_cell = f'<td class="original-col">{html.escape(original_text)}</td>'
+                base_html = base_html[:metrics_end] + original_cell + base_html[metrics_end:]
+    
+    return base_html 
