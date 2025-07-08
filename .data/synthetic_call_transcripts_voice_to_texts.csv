@@ -11,7 +11,7 @@ Customer: my number is 048561 415 113.
 Agent: Could I please have your Bricks membership number?
 Customer: 58440378.
 Agent: Thank you for verifying, Chloe. How can I assist you today?"
-2,Liam,"58440378,  five eight four four zero three seven eight",Chloe,Chloe Smith,048561 415 113,chloe.smith@example.com,"709 King Street, Adelaide SA 5000","Agent: Hi, this is Liam from Bricks Health Insurance.
+2,Liam,58440378,Chloe,Chloe Smith,048561 415 113,chloe.smith@example.com,"709 King Street, Adelaide SA 5000","Agent: Hi, this is Liam from Bricks Health Insurance.
 Agent: Could you confirm your full name, please?
 Customer: Chloe C h l o e Chloe Smith.
 Agent: Finally, could you provide your residential address?
