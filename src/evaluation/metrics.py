@@ -34,7 +34,7 @@ class PIIEvaluator:
     Maps Presidio detections to ground truth PII with sophisticated matching logic.
     """
     
-    def __init__(self, matching_mode: str = 'business'):
+    def __init__(self, matching_mode: str = 'business', transcript_column: str = 'original_transcript'):
         """
         Initialize PII Evaluator with configurable matching strategy.
         
@@ -50,6 +50,7 @@ class PIIEvaluator:
             raise ValueError("matching_mode must be 'business' or 'research'")
             
         self.matching_mode = matching_mode
+        self.transcript_column = transcript_column
         
         # Entity type mappings for research mode evaluation
         # Maps Presidio entity types to ground truth PII field names
@@ -134,7 +135,7 @@ class PIIEvaluator:
     def _evaluate_single_transcript(self, result_row: pd.Series, ground_truth_row: pd.Series) -> Dict:
         """Evaluate a single transcript against its ground truth."""
         transcript_id = result_row['call_id']
-        original_text = result_row['original_transcript']
+        original_text = result_row[self.transcript_column]
         detected_pii = result_row['pii_detections']
         
         # Extract ground truth PII
