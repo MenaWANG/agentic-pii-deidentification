@@ -303,6 +303,7 @@ class PurePresidioFramework:
         """
         Process the entire dataset of call transcripts.
         This is for quick demo notebook only. 
+        TODO: parameterize this method to be more generic, like the normalization_presidio_workflow
         
         Args:
             csv_path: Path to the synthetic_call_transcripts.csv file
@@ -349,12 +350,12 @@ class PurePresidioFramework:
             results_df = pd.DataFrame(results)
             
             # Log final metrics
-            final_metrics = self._calculate_final_metrics(results_df, total_processing_time)
-            print(f"\n✅ Processing complete! Final metrics:")
+            final_metrics = self._calculate_processing_metrics(results_df, total_processing_time)
+            print("\n✅ Processing complete! Final metrics:")
             # Print all metrics except the last two (which are wordy distributions)
             metrics_to_print = list(final_metrics.items())[:-2]
             for metric, value in metrics_to_print:
-                print(f"   {metric}: {value}")
+                print(f"  • {metric}: {value}")
             
             # Save results
             if output_path:
@@ -390,7 +391,7 @@ class PurePresidioFramework:
         for detection_type, count in result['custom_detections'].items():
             self.stats['custom_detections'][detection_type] += count
     
-    def _calculate_final_metrics(self, results_df: pd.DataFrame, total_time: float) -> Dict:
+    def _calculate_processing_metrics(self, results_df: pd.DataFrame, total_time: float) -> Dict:
         """Calculate final processing metrics with detailed timing information."""
         num_transcripts = len(results_df)
         avg_time_per_transcript = total_time / num_transcripts if num_transcripts > 0 else 0

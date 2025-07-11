@@ -34,7 +34,9 @@ class PIIEvaluator:
     Maps Presidio detections to ground truth PII with sophisticated matching logic.
     """
     
-    def __init__(self, matching_mode: str = 'business', transcript_column: str = "original_transcript"):
+    def __init__(self, matching_mode: str = 'business', 
+                 transcript_column: str = "original_transcript",
+                 id_column: str = "call_id"):
         """
         Initialize PII Evaluator with configurable matching strategy.
         
@@ -51,6 +53,7 @@ class PIIEvaluator:
             
         self.matching_mode = matching_mode
         self.transcript_column = transcript_column
+        self.id_column = id_column
         
         # Entity type mappings for research mode evaluation
         # Maps Presidio entity types to ground truth PII field names
@@ -108,7 +111,7 @@ class PIIEvaluator:
         
         # Process each transcript
         for idx, result_row in results_df.iterrows():
-            ground_truth_row = ground_truth_df.loc[ground_truth_df['call_id'] == result_row['call_id']].iloc[0]
+            ground_truth_row = ground_truth_df.loc[ground_truth_df[self.id_column] == result_row[self.id_column]].iloc[0]
             
             transcript_metrics = self._evaluate_single_transcript(
                 result_row, ground_truth_row
@@ -135,7 +138,7 @@ class PIIEvaluator:
     
     def _evaluate_single_transcript(self, result_row: pd.Series, ground_truth_row: pd.Series) -> Dict:
         """Evaluate a single transcript against its ground truth."""
-        transcript_id = result_row['call_id']
+        transcript_id = result_row[self.id_column]
         # Validate that the specified column exists
         if self.transcript_column not in result_row:
             raise KeyError(f"Column '{self.transcript_column}' not found in result_row. "

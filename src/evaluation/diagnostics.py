@@ -17,6 +17,7 @@ from evaluation.metrics import PIIEvaluator
 def get_transcript_cases_by_performance(results_df: pd.DataFrame, 
                                       ground_truth_df: pd.DataFrame, 
                                       transcript_column: str = 'original_transcript',
+                                      id_column: str = 'call_id',
                                       metric: str = 'recall', 
                                       n_cases: int = 3, 
                                       ascending: bool = True,
@@ -58,7 +59,9 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
     
     # Initialize evaluator with matching mode
     try:
-        evaluator = PIIEvaluator(matching_mode=matching_mode)
+        evaluator = PIIEvaluator(matching_mode=matching_mode, 
+                                 transcript_column=transcript_column, 
+                                 id_column=id_column)
     except TypeError:
         evaluator = PIIEvaluator()
         evaluator.matching_mode = matching_mode
@@ -67,11 +70,11 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
     transcript_performance = []
     
     for idx, result_row in results_df.iterrows():
-        call_id = result_row['call_id']
+        call_id = result_row[id_column]
         
         # Get corresponding ground truth
         try:
-            gt_row = ground_truth_df[ground_truth_df['call_id'] == call_id].iloc[0]
+            gt_row = ground_truth_df[ground_truth_df[id_column] == call_id].iloc[0]
         except IndexError:
             print(f"⚠️ No ground truth found for {call_id}, skipping")
             continue
@@ -97,7 +100,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
             )
             
             performance = {
-                'call_id': call_id,
+                f'{id_column}': call_id,
                 'recall': eval_result['recall'],
                 'precision': eval_result['precision'],
                 'f1_score': eval_result['f1_score'],
@@ -112,7 +115,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
             # Fallback to basic calculation
             detected_count = len(result_row['pii_detections'])
             performance = {
-                'call_id': call_id,
+                f'{id_column}': call_id,
                 'recall': None,
                 'precision': None,
                 'f1_score': None,
@@ -139,7 +142,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
     print(f"\n📊 {direction} {n_cases} PERFORMERS BY {metric.upper()}:")
     
     for i, perf in enumerate(selected_cases, 1):
-        print(f"  {i}. Call {perf['call_id']}: "
+        print(f"  {i}. Call {perf[id_column]}: "
               f"{metric}={perf[metric]:.1%}, "
               f"Recall={perf['recall']:.1%}, "
               f"Precision={perf['precision']:.1%}, "
@@ -149,14 +152,14 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
     cases_data = []
     
     for perf in selected_cases:
-        call_id = perf['call_id']
+        call_id = perf[id_column]
         
         # Get full data
-        result_row = results_df[results_df['call_id'] == call_id].iloc[0]
-        gt_row = ground_truth_df[ground_truth_df['call_id'] == call_id].iloc[0]
+        result_row = results_df[results_df[id_column] == call_id].iloc[0]
+        gt_row = ground_truth_df[ground_truth_df[id_column] == call_id].iloc[0]
         
         case_data = {
-            'call_id': call_id,
+            f'{id_column}': call_id,
             'original_transcript': result_row['original_transcript'],
             'anonymized_transcript': result_row['anonymized_transcript'],
             'detected_pii': result_row['pii_detections'],
@@ -181,6 +184,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
 
 def create_diagnostic_html_table_configurable(transcript_data: List[Dict], 
                                             transcript_column: str = 'original_transcript',
+                                            id_column: str = 'call_id',
                                             title: str = "PII Masking Anaysis", 
                                             description: str = "", 
                                             matching_mode: str = 'business') -> str:
@@ -190,6 +194,7 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     Args:
         transcript_data: List of transcript data dictionaries
         transcript_column: Column name for transcript to be dedacted
+        id_column: Column name for the call_id
         title: Title for the analysis table
         description: Description text to display
         matching_mode: 'business' (default) = any PII detection = success
@@ -272,7 +277,7 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     """
     
     for data in transcript_data:
-        call_id = data['call_id']
+        call_id = data[id_column]
         original = data[transcript_column]
         anonymized = data['anonymized_transcript']
         detected_pii = data['detected_pii']
@@ -425,6 +430,8 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
 
 def analyze_missed_pii_categories(results_df: pd.DataFrame, 
                                 ground_truth_df: pd.DataFrame,
+                                transcript_column: str = 'original_transcript',
+                                id_column: str = 'call_id',
                                 matching_mode: str = 'business') -> Dict:
     """
     Analyze missed PII by categories to identify improvement opportunities.
@@ -444,7 +451,9 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
     print("🔍 ANALYZING MISSED PII BY CATEGORIES")
     print("=" * 50)
     
-    evaluator = PIIEvaluator(matching_mode=matching_mode)
+    evaluator = PIIEvaluator(matching_mode=matching_mode, 
+                             transcript_column=transcript_column, 
+                             id_column=id_column)
     
     # Track missed PII by category
     missed_by_category = {}
@@ -455,10 +464,10 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
     all_categories = set()
     
     for idx, result_row in results_df.iterrows():
-        call_id = result_row['call_id']
+        call_id = result_row[id_column]
         
         try:
-            gt_row = ground_truth_df[ground_truth_df['call_id'] == call_id].iloc[0]
+            gt_row = ground_truth_df[ground_truth_df[id_column] == call_id].iloc[0]
         except IndexError:
             print(f"⚠️ No ground truth found for {call_id}, skipping")
             continue
@@ -476,7 +485,7 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
         
         # Get evaluation results
         eval_result = evaluator.evaluate_single_transcript_public(
-            original_text=result_row['original_transcript'],
+            original_text=result_row[transcript_column],
             detected_pii=result_row['pii_detections'],
             ground_truth_pii=ground_truth,
             call_id=call_id
@@ -495,10 +504,10 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
                 
                 missed_by_category[category_key] += 1
                 transcripts_with_misses[category_key].append({
-                    'call_id': call_id,
+                    f'{id_column}': call_id,
                     'missed_value': match.ground_truth_value,
-                    'original_text': result_row['original_transcript'][:200] + "...",
-                    'context': result_row['original_transcript'][max(0, match.start_pos-50):match.end_pos+50]
+                    'original_text': result_row[transcript_column][:200] + "...",
+                    'context': result_row[transcript_column][max(0, match.start_pos-50):match.end_pos+50]
                 })
             
             elif match.match_type in ['exact', 'partial']:
@@ -507,7 +516,7 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
                     transcripts_with_detections[category_key] = []
                 
                 transcripts_with_detections[category_key].append({
-                    'call_id': call_id,
+                    f'{id_column}': call_id,
                     'detected_value': match.detected_value,
                     'ground_truth_value': match.ground_truth_value,
                     'overlap_ratio': match.overlap_ratio,
@@ -534,7 +543,7 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
             }
     
     # Print summary
-    print(f"\n📊 MISSED PII SUMMARY:")
+    print("\n📊 MISSED PII SUMMARY:")
     # Sort by recall (1 - miss_rate) in ascending order to show worst performers first
     for category, count in sorted(missed_by_category.items(), key=lambda x: 1 - improvement_insights[x[0]]['miss_rate']):
         total = improvement_insights[category]['total_occurrences']
@@ -555,13 +564,16 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
 def analyze_confidence_vs_correctness(results_df: pd.DataFrame, 
                                     ground_truth_df: pd.DataFrame,
                                     transcript_column: str = 'original_transcript',
+                                    id_column: str = 'call_id',
                                     matching_mode: str = 'business') -> Dict:
     """
     Analyze confidence levels vs correctness to understand model thinking.
+    TODO; This diagnotic function needs diagnostics itself. :P
     
     Args:
         results_df: DataFrame with processing results
         transcript_column: Column name for transcript to be dedacted
+        id_column: Column name for the call_id
         ground_truth_df: DataFrame with ground truth data
         matching_mode: 'business' or 'research' evaluation mode
         
@@ -639,7 +651,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
             
             # Create analysis entry
             analysis_entry = {
-                'call_id': call_id,
+                f'{id_column}': call_id,
                 'detected_value': detection['text'],
                 'detected_type': detection['entity_type'],
                 'model_confidence': confidence,  
@@ -674,7 +686,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
         }
     
     # Print summary
-    print(f"\n📊 CONFIDENCE vs CORRECTNESS SUMMARY:")
+    print("\n📊 CONFIDENCE vs CORRECTNESS SUMMARY:")
     print(f"  High Confidence + Correct:    {len(high_confidence_correct):3d} cases")
     print(f"  High Confidence + Wrong:      {len(high_confidence_wrong):3d} cases")
     print(f"  Low Confidence + Correct:     {len(low_confidence_correct):3d} cases")
@@ -686,7 +698,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
         high_conf_accuracy = len(high_confidence_correct) / (len(high_confidence_correct) + len(high_confidence_wrong)) if (len(high_confidence_correct) + len(high_confidence_wrong)) > 0 else 0
         low_conf_accuracy = len(low_confidence_correct) / (len(low_confidence_correct) + len(low_confidence_wrong)) if (len(low_confidence_correct) + len(low_confidence_wrong)) > 0 else 0
         
-        print(f"\n🎯 INSIGHTS:")
+        print("\n🎯 INSIGHTS:")
         print(f"  High Confidence Accuracy: {high_conf_accuracy:.1%}")
         print(f"  Low Confidence Accuracy:  {low_conf_accuracy:.1%}")
         print(f"  Avg Confidence Score:     {sum(confidence_scores)/len(confidence_scores):.3f}")
