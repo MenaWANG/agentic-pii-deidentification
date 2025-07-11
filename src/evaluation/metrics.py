@@ -34,7 +34,7 @@ class PIIEvaluator:
     Maps Presidio detections to ground truth PII with sophisticated matching logic.
     """
     
-    def __init__(self, matching_mode: str = 'business', transcript_column: str = 'original_transcript'):
+    def __init__(self, matching_mode: str = 'business', transcript_column: str = "original_transcript"):
         """
         Initialize PII Evaluator with configurable matching strategy.
         
@@ -58,6 +58,7 @@ class PIIEvaluator:
             'PERSON': ['member_first_name', 'member_full_name', 'consultant_first_name'],
             'EMAIL_ADDRESS': ['member_email'],
             'PHONE_NUMBER': ['member_mobile'],
+            'AU_PHONE_NUMBER': ['member_mobile'],
             'LOCATION': ['member_address'],
             'AU_ADDRESS': ['member_address'],  # Custom Australian address recognizer
             'MEMBER_NUMBER': ['member_number'],  # Custom member number recognizer  
@@ -135,6 +136,10 @@ class PIIEvaluator:
     def _evaluate_single_transcript(self, result_row: pd.Series, ground_truth_row: pd.Series) -> Dict:
         """Evaluate a single transcript against its ground truth."""
         transcript_id = result_row['call_id']
+        # Validate that the specified column exists
+        if self.transcript_column not in result_row:
+            raise KeyError(f"Column '{self.transcript_column}' not found in result_row. "
+                        f"Available columns: {list(result_row.index)}")
         original_text = result_row[self.transcript_column]
         detected_pii = result_row['pii_detections']
         

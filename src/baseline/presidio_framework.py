@@ -54,28 +54,98 @@ class PurePresidioFramework:
         if self.enable_mlflow:
             self._setup_mlflow()
     
-    def _create_member_number_recognizer(self) -> PatternRecognizer:
-        """Create custom recognizer for 8-digit member numbers."""
-        # Pattern for exactly 8 digits (member numbers)
-        member_number_patterns = [
+    # def _create_member_number_recognizer(self) -> PatternRecognizer:
+    #     """Create custom recognizer for 8-digit member numbers."""
+    #     # Pattern for exactly 8 digits (member numbers)
+    #     member_number_patterns = [
+    #         Pattern(
+    #             name="member_number_8_digits",
+    #             regex=r"\b\d{8}\b",
+    #             score=0.9
+    #         ),
+    #         Pattern(
+    #             name="member_number_with_spaces",
+    #             regex=r"\b\d{4}\s?\d{4}\b",
+    #             score=0.85
+    #         )
+    #     ]
+        
+    #     return PatternRecognizer(
+    #         supported_entity="MEMBER_NUMBER",
+    #         patterns=member_number_patterns,
+    #         name="member_number_recognizer"
+    #     )
+
+    def _create_australian_phone_recognizer(self) -> PatternRecognizer:
+        """Create custom recognizer for Australian phone numbers."""
+        # Australian phone number patterns
+        australian_phone_patterns = [
             Pattern(
-                name="member_number_8_digits",
-                regex=r"\b\d{8}\b",
+                name="au_landline",
+                regex=r'\b0[2-9]\s?\d{4}\s?\d{4}\b',       # 0X XXXX XXXX (landline)
+                score=0.85
+            ),
+            Pattern(
+                name="au_mobile_standard",
+                regex=r'\b04\d{2}\s?\d{3}\s?\d{3}\b',      # 04XX XXX XXX (mobile)
                 score=0.9
             ),
             Pattern(
-                name="member_number_with_spaces",
-                regex=r"\b\d{4}\s?\d{4}\b",
-                score=0.85
+                name="au_mobile_compact",
+                regex=r'\b04\d{8}\b',                      # 04XXXXXXXX (mobile)
+                score=0.9
+            ),
+            Pattern(
+                name="au_international",
+                regex=r'\b\+61\s?[2-9]\s?\d{4}\s?\d{4}\b', # +61 X XXXX XXXX (international)
+                score=0.95
+            ),
+            Pattern(
+                name="au_synthetic",
+                regex=r'\b04\d{4}\s?\d{3}\s?\d{3}\b',      # 04XXXX XXX XXX (synthetic data)
+                score=0.7
             )
         ]
         
         return PatternRecognizer(
-            supported_entity="MEMBER_NUMBER",
-            patterns=member_number_patterns,
-            name="member_number_recognizer"
+            supported_entity="AU_PHONE_NUMBER",
+            patterns=australian_phone_patterns,
+            name="australian_phone_recognizer",
+            context=["phone", "mobile", "cell", "number", "call"]
         )
     
+    def _create_generic_number_recognizer(self) -> PatternRecognizer:
+        """Create custom recognizer for any sequence of digits."""
+        number_patterns = [
+            Pattern(
+                name="eight_digit_sequence",
+                regex=r"\b\d{8}\b",  # Specifically target 8-digit sequences
+                score=1.0 
+            ),
+            Pattern(
+                name="any_digit_sequence",
+                regex=r"\b\d{1,16}\b",  # Aggresively masking 1-16 digit sequences 
+                score=0.9  
+            ),
+            Pattern(
+                name="formatted_numbers",
+                regex=r"\b\d{1,3}(,\d{3})+\b",  # Matches numbers with commas like 1,000,000
+                score=0.65
+            ),
+            Pattern(
+                name="decimal_numbers",
+                regex=r"\b\d+\.\d+\b",  # Matches decimal numbers like 123.45
+                score=0.65
+            )
+        ]
+        
+        return PatternRecognizer(
+            supported_entity="GENERIC_NUMBER",
+            patterns=number_patterns,
+            name="generic_number_recognizer",
+            context=["number", "digit", "id", "member", "account"]  
+        )
+
     def _create_enhanced_address_recognizer(self) -> PatternRecognizer:
         """Create enhanced address recognizer for Australian addresses."""
         # Australian address patterns
@@ -121,11 +191,16 @@ class PurePresidioFramework:
         registry.load_predefined_recognizers(nlp_engine=nlp_engine, languages=["en"])
         
         # Add custom recognizers
-        member_number_recognizer = self._create_member_number_recognizer()
+        # member_number_recognizer = self._create_member_number_recognizer()
         enhanced_address_recognizer = self._create_enhanced_address_recognizer()
+        generic_number_recognizer = self._create_generic_number_recognizer()
+        au_phone_recognizer = self._create_australian_phone_recognizer()
         
-        registry.add_recognizer(member_number_recognizer)
+        
+        # registry.add_recognizer(member_number_recognizer)
         registry.add_recognizer(enhanced_address_recognizer)
+        registry.add_recognizer(generic_number_recognizer)
+        registry.add_recognizer(au_phone_recognizer)
         
         # Create analyzer with custom registry
         analyzer = AnalyzerEngine(
@@ -160,6 +235,15 @@ class PurePresidioFramework:
             
         Returns:
             Dictionary containing anonymized text and detection metadata
+            {
+            'original_text': str,           # Original input text
+            'anonymized_text': str,         # After Presidio anonymization
+            'pii_detections': List[Dict],   # PII detections found
+            'processing_time': float,       # Total processing time
+            'pii_count': int,               # Number of PII entities detected
+            'workflow': str,                # Workflow identifier
+            'custom_detections': Dict,      # Custom entity counts
+            }
         """
         start_time = time.time()
         
@@ -169,11 +253,12 @@ class PurePresidioFramework:
             language='en',
             entities=[
                 'PERSON', 'EMAIL_ADDRESS', 'PHONE_NUMBER', 
-                'LOCATION', 'ORGANIZATION', 'DATE_TIME',
-                'CREDIT_CARD', 'CRYPTO', 'IBAN_CODE', 'IP_ADDRESS',
-                'NRP', 'MEDICAL_LICENSE', 'US_SSN',
+                'LOCATION', 'CREDIT_CARD', 
+                'GENERIC_NUMBER',  # Custom entity for generic numbers
+                'AU_PHONE_NUMBER',  # Custom entity for Australian phone numbers                   
                 'MEMBER_NUMBER',  # Custom entity
                 'AU_ADDRESS'      # Custom entity
+                # 'DATE_TIME','ORGANIZATION','IP_ADDRESS', # disabled 
             ]
         )
         
@@ -210,12 +295,14 @@ class PurePresidioFramework:
             'pii_detections': pii_detections,
             'processing_time': processing_time,
             'pii_count': len(pii_detections),
-            'custom_detections': custom_stats
+            'custom_detections': custom_stats,
+            'workflow': 'pure_presidio'  
         }
     
     def process_dataset(self, csv_path: str, output_path: str = None) -> pd.DataFrame:
         """
         Process the entire dataset of call transcripts.
+        This is for quick demo notebook only. 
         
         Args:
             csv_path: Path to the synthetic_call_transcripts.csv file
@@ -247,7 +334,8 @@ class PurePresidioFramework:
                 result.update({
                     'call_id': row['call_id'],
                     'consultant_first_name': row['consultant_first_name'],
-                    'original_transcript': row['call_transcript']
+                    'original_transcript': row['call_transcript'],
+                    'anonymized_transcript': result['anonymized_text'],
                 })
                 
                 results.append(result)
@@ -406,4 +494,4 @@ if __name__ == "__main__":
         print("🎯 Ready to process full dataset!")
         print("Run: framework.process_dataset('.data/synthetic_call_transcripts.csv')")
     else:
-        print("\n❌ Please fix installation issues before proceeding.") 
+        print("\n❌ Please fix installation issues before proceeding.")

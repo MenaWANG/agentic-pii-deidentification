@@ -16,7 +16,8 @@ from evaluation.metrics import PIIEvaluator
 
 def get_transcript_cases_by_performance(results_df: pd.DataFrame, 
                                       ground_truth_df: pd.DataFrame, 
-                                      metric: str = 'f1_score', 
+                                      transcript_column: str = 'original_transcript',
+                                      metric: str = 'recall', 
                                       n_cases: int = 3, 
                                       ascending: bool = True,
                                       matching_mode: str = 'business') -> List[Dict]:
@@ -26,6 +27,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
     Args:
         results_df: DataFrame with processing results
         ground_truth_df: DataFrame with ground truth data
+        transcript_column: Column name for transcript to be dedacted
         metric: 'recall', 'precision', 'f1_score' - which metric to rank by
         n_cases: Number of cases to return (default 3)
         ascending: True for worst performers, False for best performers
@@ -88,7 +90,7 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
         try:
             # Get precise metrics from centralized evaluation
             eval_result = evaluator.evaluate_single_transcript_public(
-                original_text=result_row['original_transcript'],
+                original_text=result_row[transcript_column],
                 detected_pii=result_row['pii_detections'],
                 ground_truth_pii=ground_truth,
                 call_id=call_id
@@ -111,12 +113,12 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
             detected_count = len(result_row['pii_detections'])
             performance = {
                 'call_id': call_id,
-                'recall': 0.5,  # Conservative estimate
-                'precision': 0.7,
-                'f1_score': 0.58,
-                'total_pii_occurrences': 6,
+                'recall': None,
+                'precision': None,
+                'f1_score': None,
+                'total_pii_occurrences': None,
                 'detected_count': detected_count,
-                'exact_matches': detected_count // 2,
+                'exact_matches': None,
                 'eval_result': None
             }
         
@@ -155,8 +157,8 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
         
         case_data = {
             'call_id': call_id,
-            'original': result_row['original_transcript'],
-            'anonymized': result_row['anonymized_text'],
+            'original_transcript': result_row['original_transcript'],
+            'anonymized_transcript': result_row['anonymized_transcript'],
             'detected_pii': result_row['pii_detections'],
             'member_first_name': gt_row['member_first_name'],
             'member_full_name': gt_row['member_full_name'],  # NEW: Full name field
@@ -168,6 +170,8 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
             # Add performance metrics for reference
             'performance_metrics': perf
         }
+        if 'normalized_transcript' in result_row and pd.notna(result_row['normalized_transcript']):
+            case_data['normalized_transcript'] = result_row['normalized_transcript']
         
         cases_data.append(case_data)
     
@@ -176,7 +180,8 @@ def get_transcript_cases_by_performance(results_df: pd.DataFrame,
 
 
 def create_diagnostic_html_table_configurable(transcript_data: List[Dict], 
-                                            title: str = "PII Analysis", 
+                                            transcript_column: str = 'original_transcript',
+                                            title: str = "PII Masking Anaysis", 
                                             description: str = "", 
                                             matching_mode: str = 'business') -> str:
     """
@@ -184,6 +189,7 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     
     Args:
         transcript_data: List of transcript data dictionaries
+        transcript_column: Column name for transcript to be dedacted
         title: Title for the analysis table
         description: Description text to display
         matching_mode: 'business' (default) = any PII detection = success
@@ -267,8 +273,8 @@ def create_diagnostic_html_table_configurable(transcript_data: List[Dict],
     
     for data in transcript_data:
         call_id = data['call_id']
-        original = data['original']
-        anonymized = data['anonymized']
+        original = data[transcript_column]
+        anonymized = data['anonymized_transcript']
         detected_pii = data['detected_pii']
         
         # Get ground truth for centralized evaluation (using new structure)
@@ -548,12 +554,14 @@ def analyze_missed_pii_categories(results_df: pd.DataFrame,
 
 def analyze_confidence_vs_correctness(results_df: pd.DataFrame, 
                                     ground_truth_df: pd.DataFrame,
+                                    transcript_column: str = 'original_transcript',
                                     matching_mode: str = 'business') -> Dict:
     """
     Analyze confidence levels vs correctness to understand model thinking.
     
     Args:
         results_df: DataFrame with processing results
+        transcript_column: Column name for transcript to be dedacted
         ground_truth_df: DataFrame with ground truth data
         matching_mode: 'business' or 'research' evaluation mode
         
@@ -604,7 +612,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
         
         # Get evaluation results
         eval_result = evaluator.evaluate_single_transcript_public(
-            original_text=result_row['original_transcript'],
+            original_text=result_row[transcript_column],
             detected_pii=result_row['pii_detections'],
             ground_truth_pii=ground_truth,
             call_id=call_id
@@ -620,8 +628,7 @@ def analyze_confidence_vs_correctness(results_df: pd.DataFrame,
             is_correct = False
             
             for match in eval_result['matches']:
-                if (match.detected_value == detection['text'] and 
-                    match.detected_type == detection['entity_type']):
+                if match.detected_value == detection['text']:
                     match_found = True
                     is_correct = match.match_type in ['exact', 'partial']
                     break

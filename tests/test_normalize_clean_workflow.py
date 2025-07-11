@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from utils.text_normaliser import TextNormaliser
 from evaluation.metrics import PIIEvaluator
-import pandas as pd
+
 
 
 class ProposedWorkflowDemo:
