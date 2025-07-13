@@ -500,7 +500,7 @@ class TestPurePresidioFrameworkPerformance:
             print(f"Timing test {i+1} (length: {text_length}):")
             print(f"  Processing time: {processing_time:.4f} seconds")
             print(f"  PII count: {result['pii_count']}")
-            # print(f"  Characters per second: {text_length/processing_time:.0f}") #yeah, it is that fast
+
             
             # Reasonable timing constraints
             # assert processing_time > 0, "Processing time should be positive"

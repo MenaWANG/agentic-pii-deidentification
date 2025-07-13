@@ -34,7 +34,9 @@ class PIIEvaluator:
     Maps Presidio detections to ground truth PII with sophisticated matching logic.
     """
     
-    def __init__(self, matching_mode: str = 'business'):
+    def __init__(self, matching_mode: str = 'business', 
+                 transcript_column: str = "original_transcript",
+                 id_column: str = "call_id"):
         """
         Initialize PII Evaluator with configurable matching strategy.
         
@@ -50,6 +52,8 @@ class PIIEvaluator:
             raise ValueError("matching_mode must be 'business' or 'research'")
             
         self.matching_mode = matching_mode
+        self.transcript_column = transcript_column
+        self.id_column = id_column
         
         # Entity type mappings for research mode evaluation
         # Maps Presidio entity types to ground truth PII field names
@@ -57,6 +61,7 @@ class PIIEvaluator:
             'PERSON': ['member_first_name', 'member_full_name', 'consultant_first_name'],
             'EMAIL_ADDRESS': ['member_email'],
             'PHONE_NUMBER': ['member_mobile'],
+            'AU_PHONE_NUMBER': ['member_mobile'],
             'LOCATION': ['member_address'],
             'AU_ADDRESS': ['member_address'],  # Custom Australian address recognizer
             'MEMBER_NUMBER': ['member_number'],  # Custom member number recognizer  
@@ -106,7 +111,7 @@ class PIIEvaluator:
         
         # Process each transcript
         for idx, result_row in results_df.iterrows():
-            ground_truth_row = ground_truth_df.loc[ground_truth_df['call_id'] == result_row['call_id']].iloc[0]
+            ground_truth_row = ground_truth_df.loc[ground_truth_df[self.id_column] == result_row[self.id_column]].iloc[0]
             
             transcript_metrics = self._evaluate_single_transcript(
                 result_row, ground_truth_row
@@ -133,8 +138,12 @@ class PIIEvaluator:
     
     def _evaluate_single_transcript(self, result_row: pd.Series, ground_truth_row: pd.Series) -> Dict:
         """Evaluate a single transcript against its ground truth."""
-        transcript_id = result_row['call_id']
-        original_text = result_row['original_transcript']
+        transcript_id = result_row[self.id_column]
+        # Validate that the specified column exists
+        if self.transcript_column not in result_row:
+            raise KeyError(f"Column '{self.transcript_column}' not found in result_row. "
+                        f"Available columns: {list(result_row.index)}")
+        original_text = result_row[self.transcript_column]
         detected_pii = result_row['pii_detections']
         
         # Extract ground truth PII

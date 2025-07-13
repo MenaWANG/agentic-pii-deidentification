@@ -1,4 +1,4 @@
-# Plan B Implementation: Separate TextNormaliser + PurePresidioFramework
+# Implementation: Separate TextNormaliser + PurePresidioFramework
 
  
 
@@ -21,21 +21,18 @@ Keep TextNormaliser and PurePresidioFramework as separate components. Add normal
 
 ### Phase 2: Data Structure & Helper Functions
 
-- [ ] **Create helper/wrapper functions**
-- [ ] Create `process_transcript_with_normalization()` function in utils or new module
-- [ ] Function should take `raw_text` and return dict with `raw_text`, `normalized_text`, `anonymized_text`, `detected_pii`
-- [ ] Consider what's the best naming that will works best with other modules, and across different situations
-        - Do we always do normalization? (Maybe not, what if it is a online chat that we want to dedact)
-        - If so, maybe keep "original transcrip" naming in metrics
-        - Let process_transcript() & html_table functions to handle the naming differences
-- [ ] Add timing metrics for normalization and presidio steps separately
-- [ ] Test the wrapper function with sample data
+- [x] **Create helper/wrapper functions**
+- [x] Create `process_transcript_with_normalization()` function in utils or new module
+- [x] Function should take `raw_text` and return dict with `raw_text`, `normalized_text`, `anonymized_text`, `detected_pii`
+- [x] Evaluation and diagnostic modules take a parameter as `transcript_column`
+- [x] Add timing metrics for normalization and presidio steps separately
+- [x] Test the wrapper function with sample data
  
 
-- [ ] **Update data structures**
-- [ ] Ensure result dictionaries include both `raw_text` and `normalized_text`
-- [ ] Maintain backward compatibility with existing result structure
-- [ ] Document the new data structure format
+- [x] **Update data structures**
+- [x] Ensure result dictionaries include both `raw_text` and `normalized_text`
+- [x] Maintain backward compatibility with existing result structure
+- [x] Document the new data structure format
  
 
 ### Phase 3: Visualization Enhancement
