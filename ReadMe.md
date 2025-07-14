@@ -123,7 +123,7 @@ class AgenticFramework:
 
 The following diagram illustrates the sequential and conditional logic of the agentic orchestration pipeline:
 
-![Agentic PII Deidentification Pipeline](assets/images/agentic-pipeline-diagram.png)
+![Agentic PII Deidentification Pipeline](assets/images/presidio-agentic-workflow.png)
 
 > **Note**: This diagram shows the decision flow where the Context Analyzer Agent determines processing complexity, leading to either standard or intensive PII detection modes across subsequent agents.
 
