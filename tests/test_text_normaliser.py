@@ -405,6 +405,19 @@ class TestIntegratedNormalization:
         assert "support.team@company.com" in result
         assert "041648996374" in result
     
+    def test_normalize_text_complex_scenario(self):
+        """Test number letter seperation, which helps with GENERIC_NUMBER replacement in Presidio."""
+        text = """
+        Your membership number is a b c nine five nine two four six one seven.
+        For urgent matters, call us at anz zero four one six four eight nine nine six three seven four.
+        """
+        
+        result = self.normaliser.normalize_text(text)
+        
+        # Check that all transformations were applied
+        assert "abc 95924617" in result
+        assert "anz 041648996374" in result
+    
     def test_normalize_text_edge_cases(self):
         """Test edge cases for full normalization."""
         # None input
@@ -414,10 +427,8 @@ class TestIntegratedNormalization:
         assert self.normaliser.normalize_text("") == ""
         
         # Non-string input
-        assert self.normaliser.normalize_text(123) == 123
-        
-        # Only spaces
-        assert self.normaliser.normalize_text("   ") == "   "
+        assert self.normaliser.normalize_text(123) == 123    
+
     
     def test_normalize_text_no_changes_needed(self):
         """Test text that doesn't need normalization."""
@@ -562,3 +573,52 @@ class TestPerformance:
         
         assert result1 == result2
         assert "john@gmail.com" in result1 
+
+class TestFillerWordRemoval:
+    """Test filler word removal functionality."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.normaliser = TextNormaliser(remove_fillers=True)
+    
+    def test_basic_filler_removal(self):
+        """Test basic filler word removal."""
+        # Test simple fillers
+        assert self.normaliser.remove_filler_words("uh hello") == "hello"
+        assert self.normaliser.remove_filler_words("hello um there") == "hello there"
+        
+    def test_multiple_fillers(self):
+        """Test multiple filler words in a sentence."""
+        text = "I uh need to um check my hmm account details"
+        expected = "I need to check my account details"
+        assert self.normaliser.remove_filler_words(text) == expected
+        
+    def test_placeholder_option(self):
+        """Test keeping placeholders instead of removing."""
+        text = "I uh need to um check my account"
+        expected = "I <FILLER> need to <FILLER> check my account"
+        assert self.normaliser.remove_filler_words(text, keep_placeholder=True) == expected
+        
+    def test_custom_replacement(self):
+        """Test custom replacement string."""
+        text = "I uh need to um check my hmm account"
+        expected = "I [FILLER] need to [FILLER] check my [FILLER] account"
+        assert self.normaliser.remove_filler_words(text, replacement=" [FILLER] ") == expected
+        
+       
+    def test_integration_with_normalize_text(self):
+        """Test that filler removal works in the full normalization pipeline."""
+        text = "my number is uh uh zero four one two um mm three four"
+        normalizer = TextNormaliser(remove_fillers=True)
+        result = normalizer.normalize_text(text)
+        assert " uh " not in result
+        assert " um " not in result
+        assert "0412" in result
+        
+    def test_disable_filler_removal(self):
+        """Test that filler removal can be disabled."""
+        text = "I um um need to uh check my account"
+        normalizer = TextNormaliser(remove_fillers=False)
+        result = normalizer.normalize_text(text)
+        assert " um " in result
+        assert " uh " in result

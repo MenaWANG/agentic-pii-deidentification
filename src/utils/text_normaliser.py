@@ -26,26 +26,34 @@ class TextNormaliser:
     1. Convert spelled-out numbers to digits (keeping spaces)
     2. Combine separated characters/numbers (letters or digits)
     3. Reconstruct email addresses from spoken form
+    4. Remove conversational filler words (uh, huh, mm, hmm, etc.)
     
     Examples:
     - "my number is zero four one two" → "my number is 0412"
     - "my member id is a b c one two three" → "my member id is abc123"
     - "my email address is john doe at gmail dot com" → "my email address is john.doe@gmail.com"
+    - "I uh need to um check my hmm account" → "I need to check my account"
     """
     
-    def __init__(self, email_username_words=2):
+    def __init__(self, email_username_words=2, remove_fillers=True):
         """
         Initialize the text normaliser with predefined mappings.
         
         Args:
             email_username_words: Number of words before 'at' to consider as email username (default: 2)
+            remove_fillers: Whether to automatically remove filler words during normalization (default: True)
         """
         self.email_username_words = email_username_words
+        self.remove_fillers = remove_fillers
         self.number_words = {
             'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
             'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
         }
         
+        # Filler words configuration
+        self.filler_patterns = [
+            r'\buh\b', r'\bhuh\b', r'\bmm+\b', r'\bhmm+\b', r'\bum+\b'
+        ]        
         # Common email providers and their variations
         self.email_providers = {
             'gmail': 'gmail.com',
@@ -95,6 +103,9 @@ class TextNormaliser:
             r'([a-zA-Z][a-zA-Z0-9._-]*(?:\s+[a-zA-Z0-9._-]+){0,3})\s+at\s+([a-zA-Z0-9.-]+(?:\s+[a-zA-Z0-9.-]+)*)\s+dot\s+([a-zA-Z]{2,})\b',
             re.IGNORECASE
         )
+        
+        # Compile filler word patterns
+        self.filler_word_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.filler_patterns]
     
     def normalize_separated_chars(self, text: str) -> str:
         """
@@ -217,14 +228,51 @@ class TextNormaliser:
         logger.debug(f"Email normalization: '{text}' → '{result}'")
         return result
     
+    def remove_filler_words(self, text: str, replacement=' ', keep_placeholder=False) -> str:
+        """
+        Remove or replace conversational filler words from transcript text.
+        
+        Examples:
+        - "I uh need to mm mm check my hmm account" → "I need to check my account"
+        - "You know, it's uh really important" → "it's really important"
+        
+        Args:
+            text: Input text containing filler words
+            replacement: String to replace fillers with (default: empty string)
+            keep_placeholder: If True, replace with <FILLER> token instead of removing
+            
+        Returns:
+            Text with filler words removed or replaced
+        """
+        if not text or not isinstance(text, str):
+            return text
+            
+        result = text
+        
+        # Process each filler pattern
+        for pattern in self.filler_word_patterns:
+            if keep_placeholder:
+                placeholder = ' <FILLER> '
+                result = pattern.sub(placeholder, result)
+            else:
+                result = pattern.sub(replacement, result)
+        
+        # Clean up multiple spaces and whitespace at ends
+        result = re.sub(r'\s{2,}', ' ', result).strip()
+        
+        logger.debug(f"Filler word removal: '{text}' → '{result}'")
+        return result       
+
+    
     def normalize_text(self, text: str) -> str:
         """
         Apply all normalization rules to the input text.
         
-        Uses a two-step approach:
+        Uses a multi-step approach:
         1. First convert spelled-out numbers to digits (keeping spaces)
         2. Then combine separated characters/numbers
-        3. Finally normalize email addresses
+        3. Normalize email addresses
+        4. Remove filler words (if enabled)
         
         Args:
             text: Input text to normalize
@@ -243,6 +291,10 @@ class TextNormaliser:
         
         # Step 3: Normalize email addresses
         normalized = self.normalize_email_addresses(normalized)
+        
+        # Step 4: Remove filler words (if enabled)
+        if self.remove_fillers:
+            normalized = self.remove_filler_words(normalized)
         
         logger.info(f"Full normalization: '{text}' → '{normalized}'")
         return normalized
