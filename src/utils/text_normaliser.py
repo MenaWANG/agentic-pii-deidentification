@@ -45,9 +45,19 @@ class TextNormaliser:
         """
         self.email_username_words = email_username_words
         self.remove_fillers = remove_fillers
+        # Number word mappings - comprehensive set of spoken numbers to digits
+        # The main goal is to convert spoken numbers to digit format so they can be 
+        # properly detected as GENERIC_NUMBER, PHONE_NUMBER, or other numeric PII by Presidio
         self.number_words = {
+            # Single digits
             'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
-            'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9'
+            'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+            # Teens
+            'ten': '10', 'eleven': '11', 'twelve': '12', 'thirteen': '13', 'fourteen': '14',
+            'fifteen': '15', 'sixteen': '16', 'seventeen': '17', 'eighteen': '18', 'nineteen': '19',
+            # Tens
+            'twenty': '20', 'thirty': '30', 'forty': '40', 'fifty': '50',
+            'sixty': '60', 'seventy': '70', 'eighty': '80', 'ninety': '90'
         }
         
         # Filler words configuration
@@ -134,9 +144,15 @@ class TextNormaliser:
     
     def normalize_number_words(self, text: str) -> str:
         """
-        Convert number words to digits.
+        Convert number words to digits for improved PII detection.
         
-        Example: "zero four one two three four five six seven" → "041234567"
+        The primary purpose is to convert spoken number representations into digit format
+        so that Presidio can properly identify them as PII (GENERIC_NUMBER, PHONE_NUMBER, etc.).
+        We prioritize detection over numerical precision, simply mapping each number word 
+        directly to its corresponding digit representation.
+        
+        Examples: 
+        - "zero four one two three four five six seven" → "041234567"
         
         Args:
             text: Input text containing number words
@@ -147,6 +163,8 @@ class TextNormaliser:
         def replace_numbers(match):
             number_sequence = match.group(0)
             words = number_sequence.lower().split()
+            
+            # Simply map each number word to its digit representation
             digits = ''.join(self.number_words.get(word, word) for word in words)
             return digits
         
@@ -380,4 +398,4 @@ def normalize_spelled_letters(text: str) -> str:
     Returns:
         Text with separated characters combined
     """
-    return normalize_separated_chars(text) 
+    return normalize_separated_chars(text)

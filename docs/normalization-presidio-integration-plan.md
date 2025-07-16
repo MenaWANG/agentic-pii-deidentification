@@ -71,19 +71,19 @@ Keep TextNormaliser and PurePresidioFramework as separate components. Add normal
 
 ### Phase 5: Documentation & Testing
 
-- [ ] **Update documentation**
-- [ ] Update README with three-stage workflow examples
-- [ ] Document the new helper functions
-- [ ] Add examples of using components separately vs together
+- [x] **Update documentation**
+- [x] Update README with three-stage workflow examples
+- [x] Document the new helper functions
+- [x] Add examples of using components separately vs together
 
  
 
-- [ ] **Add tests**
+- [x] **Add tests**
 
-- [ ] Test helper/wrapper functions
+- [x] Test helper/wrapper functions
 - [ ] Test `create_three_stage_html_table()` function
-- [ ] Test integration between TextNormaliser and PurePresidioFramework
-- [ ] Ensure all existing tests still pass (no breaking changes)
+- [x] Test integration between TextNormaliser and PurePresidioFramework
+- [x] Ensure all existing tests still pass (no breaking changes)
 
  
 
@@ -91,10 +91,10 @@ Keep TextNormaliser and PurePresidioFramework as separate components. Add normal
 
 - [ ] **End-to-end testing**
 
-- [ ] Run complete workflow on test data
-- [ ] Verify performance metrics are accurate
-- [ ] Test with both business and research matching modes
-- [ ] Validate HTML output in notebooks
+- [x] Run complete workflow on test data
+- [x] Verify performance metrics are accurate
+- [x] Test with both business and research matching modes
+- [x] Validate HTML output in notebooks
 
  
 
