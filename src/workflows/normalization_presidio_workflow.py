@@ -24,10 +24,10 @@ def process_transcript_with_normalization(text: str,
                                         sweep_ordinals: bool = True,
                                         custom_sweeping_dict: Optional[Dict[str, List[str]]] = None) -> Dict:
     """
-    Complete multi-stage workflow: Raw → Normalize → (Optional: Sweep) → Clean
+    Complete multi-stage workflow: Raw → Normalize → Presidio → (Optional: Sweep)
     
-    Combines TextNormaliser preprocessing with optional TextSweeper layer and 
-    PurePresidioFramework processing to provide enhanced PII detection on normalized text.
+    Combines TextNormaliser preprocessing with PurePresidioFramework processing,
+    followed by an optional TextSweeper layer for additional pattern-based anonymization.
     
     Args:
         text (str): Original transcript text
@@ -35,7 +35,7 @@ def process_transcript_with_normalization(text: str,
         presidio_framework (PurePresidioFramework, optional): Pre-initialized framework. Creates new if None.
         sweeper (TextSweeper, optional): Pre-initialized sweeper. Creates new if None.
         email_username_words (int): Number of words to consider for email username normalization
-        apply_sweeping (bool): Whether to apply the sweeping layer after normalization
+        apply_sweeping (bool): Whether to apply the sweeping layer after Presidio
         sweep_months (bool): Whether to replace month names with <MONTH>
         sweep_ordinals (bool): Whether to replace ordinal numbers with <GENERIC_NUMBER>
         custom_sweeping_dict (Dict[str, List[str]], optional): Custom entity replacements
@@ -45,15 +45,16 @@ def process_transcript_with_normalization(text: str,
         {
             'original_text': str,           # Original input text
             'normalized_text': str,         # After TextNormaliser processing
+            'presidio_text': str,           # After Presidio anonymization
             'swept_text': str,              # After TextSweeper processing (if enabled)
-            'anonymized_text': str,         # After Presidio anonymization
-            'pii_detections': List[Dict],   # PII detections found
+            'anonymized_text': str,         # Final cleaned text
+            'pii_detections': List[Dict],   # PII detections found via presidio
             'processing_time': float,       # Total processing time
             'normalization_time': float,    # Time spent on normalization
-            'sweeping_time': float,         # Time spent on sweeping (if enabled)
             'presidio_time': float,         # Time spent on Presidio processing
-            'pii_count': int,               # Number of PII entities detected
-            'custom_detections': Dict,      # Custom entity counts
+            'sweeping_time': float,         # Time spent on sweeping (if enabled)
+            'pii_count': int,               # Number of PII entities detected via presidio
+            'custom_detections': Dict,      # Custom entity counts via presidio
             'normalization_applied': bool,  # Whether normalization was applied
             'sweeping_applied': bool,       # Whether sweeping was applied
             'workflow': str,                # Workflow identifier
@@ -77,26 +78,24 @@ def process_transcript_with_normalization(text: str,
     normalized_text = normalizer.normalize_text(text)
     norm_time = time.time() - norm_start
     
-    # Step 3 (Optional): Sweeping (Normalized → Swept)
+    # Step 3: PII Detection & Anonymization (Normalized → Presidio)
+    presidio_start = time.time()
+    presidio_results = presidio_framework.process_transcript(normalized_text)
+    presidio_time = time.time() - presidio_start
+    
+    # Step 4 (Optional): Sweeping (Presidio → Swept)
     sweep_time = 0
-    swept_text = normalized_text
+    final_text = presidio_results['anonymized_text']
     
     if apply_sweeping and sweeper is not None:
         sweep_start = time.time()
-        swept_text = sweeper.sweep_text(
-            normalized_text,
+        final_text = sweeper.sweep_text(
+            presidio_results['anonymized_text'],
             sweep_months=sweep_months,
             sweep_ordinals=sweep_ordinals,
             custom_dict=custom_sweeping_dict
         )
         sweep_time = time.time() - sweep_start
-    
-    # Step 4: PII Detection & Anonymization (Normalized/Swept → Clean)
-    presidio_start = time.time()
-    # Use swept text if sweeping was applied, otherwise use normalized text
-    presidio_input = swept_text if apply_sweeping else normalized_text
-    presidio_results = presidio_framework.process_transcript(presidio_input)
-    presidio_time = time.time() - presidio_start
     
     total_time = time.time() - start_time
     
@@ -105,9 +104,10 @@ def process_transcript_with_normalization(text: str,
         # Multi-stage workflow outputs
         'original_text': text,
         'normalized_text': normalized_text,
-        'anonymized_text': presidio_results['anonymized_text'],
+        'presidio_text': presidio_results['anonymized_text'],
         
-        # Detection results (from Presidio on normalized/swept text)
+        
+        # Detection results (from Presidio on normalized text)
         'pii_detections': presidio_results['pii_detections'],
         'pii_count': presidio_results['pii_count'],
         
@@ -117,18 +117,20 @@ def process_transcript_with_normalization(text: str,
         'presidio_time': presidio_time,
         
         # Additional metadata
-        'workflow': 'normalization_sweeping_presidio' if apply_sweeping else 'normalization_presidio',
+        'workflow': 'normalization_presidio_sweeping' if apply_sweeping else 'normalization_presidio',
         'normalization_applied': True,
         'custom_detections': presidio_results.get('custom_detections', None)
     }
     
     # Add sweeping-related fields if it was applied
     if apply_sweeping:
-        combined_results['swept_text'] = swept_text
+        combined_results['swept_text'] = final_text
         combined_results['sweeping_time'] = sweep_time
         combined_results['sweeping_applied'] = True
+        combined_results['anonymized_text'] = final_text  # Final output is swept text
     else:
         combined_results['sweeping_applied'] = False
+        combined_results['anonymized_text'] = presidio_results['anonymized_text']  # Final output is presidio text
     
     return combined_results
 
@@ -146,7 +148,7 @@ def process_dataset_with_normalization(raw_df: pd.DataFrame,
         Args:
             raw_df: DataFrame containing the raw data
             id_column: Column name containing the call_id
-            apply_sweeping: Whether to apply the sweeping layer after normalization
+            apply_sweeping: Whether to apply the sweeping layer after Presidio
             sweep_months: Whether to replace month names with <MONTH>
             sweep_ordinals: Whether to replace ordinal numbers with <GENERIC_NUMBER>
             custom_sweeping_dict: Custom entity replacements dictionary
@@ -154,7 +156,7 @@ def process_dataset_with_normalization(raw_df: pd.DataFrame,
         Returns:
             DataFrame with anonymized transcripts and analysis
         """
-        workflow_name = "Normalization + Sweeping + Presidio" if apply_sweeping else "Normalization + Presidio"
+        workflow_name = "Normalization + Presidio + Sweeping" if apply_sweeping else "Normalization + Presidio"
         print(f"🚀 Starting Integrated {workflow_name} Framework processing...")
         
         # Initialize components once for reuse
@@ -196,7 +198,8 @@ def process_dataset_with_normalization(raw_df: pd.DataFrame,
         cleaned_df = pd.DataFrame(results)
         column_renames = {
             'original_text': 'original_transcript', 
-            'normalized_text': 'normalized_transcript', 
+            'normalized_text': 'normalized_transcript',
+            'presidio_text': 'presidio_transcript',
             'anonymized_text': 'anonymized_transcript'
         }
         
@@ -253,9 +256,9 @@ def _calculate_processing_metrics(results_df: pd.DataFrame,
         'total_pii_detected': results_df['pii_count'].sum(),
         'avg_pii_per_transcript': round(results_df['pii_count'].mean(), 2),
         'total_processing_time_seconds': round(total_processing_time, 4),
-        'presidio_processing_time_seconds': round(presidio_time, 4),  # Fixed typo in 'presidio'
+        'presidio_processing_time_seconds': round(presidio_time, 4),
         'normalization_processing_time_seconds': round(normalization_time, 4),
-        'workflow_stages': 'Normalization + Sweeping + Presidio' if sweeping_applied else 'Normalization + Presidio',
+        'workflow_stages': 'Normalization + Presidio + Sweeping' if sweeping_applied else 'Normalization + Presidio',
         'avg_processing_time_per_transcript_seconds': round(avg_time_per_transcript, 4),
         'estimated_time_for_1m_transcripts': time_1m_estimate
     }

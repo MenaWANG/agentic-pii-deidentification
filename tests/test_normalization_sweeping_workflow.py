@@ -65,10 +65,12 @@ class TestNormalizationSweepingWorkflow:
         """Test workflow with sweeping layer enabled."""
         test_text = "My name is John Smith, born on January 21st."
         
+        presidio_framework = PurePresidioFramework(enable_mlflow=False)
+        
         result = process_transcript_with_normalization(
             text=test_text,
             normalizer=TextNormaliser(),
-            presidio_framework=mock_presidio_framework,
+            presidio_framework=presidio_framework,
             sweeper=TextSweeper(),
             apply_sweeping=True,
             sweep_months=True,
@@ -81,7 +83,7 @@ class TestNormalizationSweepingWorkflow:
         assert 'normalized_text' in result
         assert 'anonymized_text' in result
         assert 'swept_text' in result  # Should exist when sweeping is enabled
-        assert result['workflow'] == 'normalization_sweeping_presidio'
+        assert result['workflow'] == 'normalization_presidio_sweeping'
         assert result['sweeping_applied'] is True
         assert 'sweeping_time' in result
         
@@ -94,25 +96,19 @@ class TestNormalizationSweepingWorkflow:
         assert "<GENERIC_NUMBER>" in swept_text
         assert "<PERSON>" in swept_text
         
-        # Verify mock interaction
-        mock_presidio_framework.process_transcript.assert_called_once()
-        # The input to Presidio should be the swept text
-        args, _ = mock_presidio_framework.process_transcript.call_args
-        input_text = args[0]
-        # Input should be the swept text
-        assert "January" not in input_text
-        assert "21st" not in input_text
-        assert "John Smith" not in input_text
+
 
     def test_workflow_with_partial_sweeping(self, mock_presidio_framework):
         """Test workflow with only some sweeping features enabled."""
         test_text = "My name is John Smith, born on January 21st."
         
+        presidio_framework = PurePresidioFramework(enable_mlflow=False)
+        
         # Only sweep months, not ordinals or custom entities
         result = process_transcript_with_normalization(
             text=test_text,
             normalizer=TextNormaliser(),
-            presidio_framework=mock_presidio_framework,
+            presidio_framework=presidio_framework,
             sweeper=TextSweeper(),
             apply_sweeping=True,
             sweep_months=True,
@@ -121,7 +117,7 @@ class TestNormalizationSweepingWorkflow:
         )
         
         # Verify workflow stages
-        assert result['workflow'] == 'normalization_sweeping_presidio'
+        assert result['workflow'] == 'normalization_presidio_sweeping'
         assert result['sweeping_applied'] is True
         
         # Verify selective sweeping was applied correctly
@@ -130,7 +126,7 @@ class TestNormalizationSweepingWorkflow:
         assert "January" not in swept_text
         assert "<MONTH>" in swept_text
         assert "21st" in swept_text  # Ordinals not swept
-        assert "John Smith" in swept_text  # Custom entities not swept
+        assert "John Smith" not in swept_text  
         assert "John Smith" not in anonymized_text
 
     def test_performance_metrics(self, mock_presidio_framework):
@@ -173,60 +169,57 @@ class TestEndToEndWorkflow:
         data = {
             'call_id': [1, 2],
             'call_transcript': [
-                "My name is John Smith and I was born on January 21st, 1990.",
-                "Jane Doe called on February 3rd about her account number 12345678."
+                "My name is John Smith and I was born on January 21st, 1990. My phone is 0412345678.",
+                "Jane Doe called on February 3rd about her account number 12345678. Her email is jane.doe@email.com"
             ]
         }
         return pd.DataFrame(data)
-    
-    @patch('src.workflows.normalization_presidio_workflow.PurePresidioFramework')
-    def test_process_dataset_with_sweeping(self, mock_presidio_class, sample_dataframe):
+
+    def test_process_dataset_with_sweeping(self, sample_dataframe):
         """Test processing a dataset with sweeping enabled."""
-        # Mock the presidio framework's process_transcript method
-        mock_instance = Mock()
-        mock_instance.process_transcript.side_effect = lambda text: {
-            'anonymized_text': f"[PROCESSED: {text[:20]}...]",
-            'pii_detections': [{'entity_type': 'TEST', 'text': 'test'}],
-            'pii_count': 1,
-            'custom_detections': {}
-        }
-        mock_presidio_class.return_value = mock_instance
-        
-        # Import here to use the patched class
         from src.workflows.normalization_presidio_workflow import process_dataset_with_normalization
-        
-        # Process with sweeping enabled
         result_df = process_dataset_with_normalization(
             raw_df=sample_dataframe,
             apply_sweeping=True,
             sweep_months=True,
-            sweep_ordinals=True,
-            custom_sweeping_dict={'<PERSON>': ['John Smith', 'Jane Doe']}
+            sweep_ordinals=True
         )
         
-        # Verify the results
+        # Verify the results structure
         assert len(result_df) == 2
         assert 'original_transcript' in result_df.columns
         assert 'normalized_transcript' in result_df.columns
+        assert 'presidio_transcript' in result_df.columns
         assert 'swept_transcript' in result_df.columns
         assert 'anonymized_transcript' in result_df.columns
         
-        # Check first row for proper sweeping
+        # Check first row for proper PII handling
+        first_presidio = result_df.iloc[0]['presidio_transcript']
+        assert "John Smith" not in first_presidio
+        assert "<PERSON>" in first_presidio
+        assert "0412345678" not in first_presidio
+
+        
         first_swept = result_df.iloc[0]['swept_transcript']
         assert "<MONTH>" in first_swept
         assert "<GENERIC_NUMBER>" in first_swept
-        assert "<PERSON>" in first_swept
         assert "January" not in first_swept
         assert "21st" not in first_swept
-        assert "John Smith" not in first_swept
+        assert "<PERSON>" in first_swept  # Presidio replacements preserved
+
+        
+        # Check second row for proper PII handling
+        second_presidio = result_df.iloc[1]['presidio_transcript']
+        assert "Jane Doe" not in second_presidio
+        assert "<PERSON>" in second_presidio
+        assert "jane.doe@email.com" not in second_presidio
+        assert "<EMAIL_ADDRESS>" in second_presidio
+        assert "12345678" not in second_presidio
         
         second_swept = result_df.iloc[1]['swept_transcript']
         assert "<MONTH>" in second_swept
         assert "<GENERIC_NUMBER>" in second_swept
-        assert "<PERSON>" in second_swept
         assert "February" not in second_swept
         assert "3rd" not in second_swept
-        assert "Jane Doe" not in second_swept
-        
-        # Verify mock called correctly for both rows
-        assert mock_instance.process_transcript.call_count == 2
+        assert "<PERSON>" in second_swept  # Presidio replacements preserved
+        assert "<EMAIL_ADDRESS>" in second_swept
