@@ -2,7 +2,7 @@ call_id,consultant_first_name,member_number,member_first_name,member_full_name,m
 1,Liam,58440378,Chloe,Chloe Smith,048561 415 113,chloe.smith@example.com,"709 King Street, Adelaide SA 5000","Agent: Hi, this is Liam from Bricks Health Insurance.
 Agent: Could you confirm your full name, please?
 Customer: Chloe Smith.
-Agent: Finally, could you provide your residential address?
+Agent: Could you provide your residential address?
 Customer: 709 King Street, Adelaide SA 5000.
 Agent: And your email address, please?
 Customer: chloe.smith@example.com.
@@ -10,11 +10,13 @@ Agent: May I have your mobile number?
 Customer: my number is 048561 415 113.
 Agent: Could I please have your Bricks membership number?
 Customer: 58440378.
+Agent: Finally, could I confirm your birthday?
+Customer: It is 15th March, 1985.
 Agent: Thank you for verifying, Chloe. How can I assist you today?"
 2,Liam,58440378,Chloe,Chloe Smith,048561 415 113,chloe.smith@example.com,"709 King Street, Adelaide SA 5000","Agent: Hi, this is Liam from Bricks Health Insurance.
 Agent: Could you confirm your full name, please?
 Customer: Chloe C h l o e Chloe Smith.
-Agent: Finally, could you provide your residential address?
+Agent: Could you provide your residential address?
 Customer: 709 King Street, Adelaide SA 5000.
 Agent: And your email address, please?
 Customer: that would be c h l o e smith at example dot com
@@ -22,16 +24,6 @@ Agent: May I have your mobile number?
 Customer: my number is zero four eight five six one four one five one one three.
 Agent: Could I please have your Bricks membership number?
 Customer: five eight four four zero three seven eight.
+Agent: Finally, could I confirm your birthday?
+Customer: It is fifteenth March, 1985.
 Agent: Thank you for verifying, Chloe. How can I assist you today?"
-3,Olivia,22073984,Daniel,Daniel Anthony Johnson,048245 340 110,daniel.johnson@example.com,"771 Church Street, Melbourne VIC 3000","Agent: Hi, this is olivia from Bricks Health Insurance.
-Agent: Could you confirm your full name, please?
-Customer: daniel anthony johnson.
-Agent: And your email address, please?
-Customer: daniel.johnson@example.com.
-Agent: Could I please have your Bricks membership number?
-Customer: 22073984.
-Agent: Finally, could you provide your residential address?
-Customer: 771 Church Street, Melbourne VIC 3000.
-Agent: May I have your mobile number?
-Customer: 048245 340 110.
-Agent: Thank you for verifying, Daniel. How can I assist you today?"

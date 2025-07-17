@@ -19,10 +19,13 @@ def process_transcript_with_normalization(text: str,
                                         presidio_framework: PurePresidioFramework = None,
                                         sweeper: TextSweeper = None,
                                         email_username_words: int = 2,
-                                        apply_sweeping: bool = False,
+                                        apply_normalization: bool = True,
+                                        apply_sweeping: bool = True,
                                         sweep_months: bool = True,
                                         sweep_ordinals: bool = True,
-                                        custom_sweeping_dict: Optional[Dict[str, List[str]]] = None) -> Dict:
+                                        custom_sweeping_dict: Optional[Dict[str, List[str]]] = None,
+                                        transcript_row: Optional[Dict] = None,
+                                        field_mapping: Optional[Dict[str, List[str]]] = None) -> Dict:
     """
     Complete multi-stage workflow: Raw → Normalize → Presidio → (Optional: Sweep)
     
@@ -35,10 +38,13 @@ def process_transcript_with_normalization(text: str,
         presidio_framework (PurePresidioFramework, optional): Pre-initialized framework. Creates new if None.
         sweeper (TextSweeper, optional): Pre-initialized sweeper. Creates new if None.
         email_username_words (int): Number of words to consider for email username normalization
+        apply_normalization (bool): Whether to apply the normalization layer
         apply_sweeping (bool): Whether to apply the sweeping layer after Presidio
         sweep_months (bool): Whether to replace month names with <MONTH>
         sweep_ordinals (bool): Whether to replace ordinal numbers with <GENERIC_NUMBER>
-        custom_sweeping_dict (Dict[str, List[str]], optional): Custom entity replacements
+        custom_sweeping_dict (Dict[str, List[str]], optional): Global custom entity replacements
+        transcript_row (Dict, optional): Row-specific transcript data containing PII fields
+        field_mapping (Dict[str, List[str]], optional): Mapping of PII placeholders to transcript field names
         
     Returns:
         Dict: Combined results with structure:
@@ -64,7 +70,7 @@ def process_transcript_with_normalization(text: str,
     start_time = time.time()
     
     # Step 1: Initialize components if not provided
-    if normalizer is None:
+    if normalizer is None and apply_normalization:
         normalizer = TextNormaliser(email_username_words=email_username_words)
     
     if presidio_framework is None:
@@ -89,12 +95,33 @@ def process_transcript_with_normalization(text: str,
     
     if apply_sweeping and sweeper is not None:
         sweep_start = time.time()
-        final_text = sweeper.sweep_text(
-            presidio_results['anonymized_text'],
-            sweep_months=sweep_months,
-            sweep_ordinals=sweep_ordinals,
-            custom_dict=custom_sweeping_dict
-        )
+        
+        # First apply global custom sweeping if provided
+        if custom_sweeping_dict:
+            final_text = sweeper.sweep_text(
+                final_text,
+                sweep_months=sweep_months,
+                sweep_ordinals=sweep_ordinals,
+                custom_dict=custom_sweeping_dict
+            )
+        
+        # Then apply row-specific field sweeping if provided
+        if transcript_row is not None and field_mapping is not None:
+            final_text = sweeper.sweep_text(
+                final_text,
+                sweep_months=sweep_months,
+                sweep_ordinals=sweep_ordinals,
+                transcript_row=transcript_row,
+                field_mapping=field_mapping
+            )
+        # If neither custom dict nor field mapping provided, just do basic sweeping
+        elif not custom_sweeping_dict:
+            final_text = sweeper.sweep_text(
+                final_text,
+                sweep_months=sweep_months,
+                sweep_ordinals=sweep_ordinals
+            )
+            
         sweep_time = time.time() - sweep_start
     
     total_time = time.time() - start_time
@@ -105,7 +132,6 @@ def process_transcript_with_normalization(text: str,
         'original_text': text,
         'normalized_text': normalized_text,
         'presidio_text': presidio_results['anonymized_text'],
-        
         
         # Detection results (from Presidio on normalized text)
         'pii_detections': presidio_results['pii_detections'],
@@ -136,94 +162,106 @@ def process_transcript_with_normalization(text: str,
 
 
 def process_dataset_with_normalization(raw_df: pd.DataFrame, 
-                                       id_column: str = "call_id",
-                                       apply_sweeping: bool = False,
-                                       sweep_months: bool = True,
-                                       sweep_ordinals: bool = True,
-                                       custom_sweeping_dict: Optional[Dict[str, List[str]]] = None) -> pd.DataFrame:
-        """
-        Process the entire dataset of call transcripts.
-        This is for quick demo notebook only. 
+                                     id_column: str = "call_id",
+                                     apply_normalization: bool = True,
+                                     apply_sweeping: bool = True,
+                                     email_username_words: int = 2,
+                                     sweep_months: bool = True,
+                                     sweep_ordinals: bool = True,
+                                     custom_sweeping_dict: Optional[Dict[str, List[str]]] = None,
+                                     field_mapping: Optional[Dict[str, List[str]]] = None) -> pd.DataFrame:
+    """
+    Process the entire dataset of call transcripts.
+    This is for quick demo notebook only. 
+    
+    Args:
+        raw_df: DataFrame containing the raw data
+        id_column: Column name containing the call_id
+        apply_normalization: Whether to apply the normalization layer
+        email_username_words: Number of words to consider for email username normalization
+        apply_sweeping: Whether to apply the sweeping layer after Presidio
+        sweep_months: Whether to replace month names with <MONTH>
+        sweep_ordinals: Whether to replace ordinal numbers with <GENERIC_NUMBER>
+        custom_sweeping_dict: Global custom entity replacements dictionary
+        field_mapping: Optional mapping of PII placeholders to transcript field names.
+                      If provided, will use the fields from each row for sweeping.
         
-        Args:
-            raw_df: DataFrame containing the raw data
-            id_column: Column name containing the call_id
-            apply_sweeping: Whether to apply the sweeping layer after Presidio
-            sweep_months: Whether to replace month names with <MONTH>
-            sweep_ordinals: Whether to replace ordinal numbers with <GENERIC_NUMBER>
-            custom_sweeping_dict: Custom entity replacements dictionary
-            
-        Returns:
-            DataFrame with anonymized transcripts and analysis
-        """
-        workflow_name = "Normalization + Presidio + Sweeping" if apply_sweeping else "Normalization + Presidio"
-        print(f"🚀 Starting Integrated {workflow_name} Framework processing...")
+    Returns:
+        DataFrame with anonymized transcripts and analysis
+    """
+    workflow_name = "Normalization + Presidio + Sweeping" if apply_sweeping else "Normalization + Presidio"
+    print(f"🚀 Starting Integrated {workflow_name} Framework processing...")
+    
+    # Initialize components once for reuse
+    normalizer = TextNormaliser(email_username_words=email_username_words) if apply_normalization else None
+    presidio_framework = PurePresidioFramework(enable_mlflow=False)
+    sweeper = TextSweeper() if apply_sweeping else None
+    
+    results = []
+    processing_time = 0
+    presidio_time = 0
+    normalization_time = 0
+    sweeping_time = 0
+    
+    for idx, row in raw_df.iterrows():
+        print(f"Processing transcript {idx+1}/{len(raw_df)}...", end='\r')
+        original_transcript = row['call_transcript']
         
-        # Initialize components once for reuse
-        normalizer = TextNormaliser()
-        presidio_framework = PurePresidioFramework(enable_mlflow=False)
-        sweeper = TextSweeper() if apply_sweeping else None
+        # If field_mapping is provided, use the current row for field-based sweeping
+        current_row = row.to_dict() if field_mapping else None
         
-        results = []
-        processing_time = 0
-        presidio_time = 0
-        normalization_time = 0
-        sweeping_time = 0
-        
-        for idx, row in raw_df.iterrows():
-            print(f"Processing transcript {idx+1}/{len(raw_df)}...", end='\r')
-            original_transcript = row['call_transcript']
-            
-            result = process_transcript_with_normalization(
-                text=original_transcript,
-                normalizer=normalizer,
-                presidio_framework=presidio_framework,
-                sweeper=sweeper,
-                apply_sweeping=apply_sweeping,
-                sweep_months=sweep_months,
-                sweep_ordinals=sweep_ordinals,
-                custom_sweeping_dict=custom_sweeping_dict
-            )
-            
-            result[id_column] = row[id_column]
-            processing_time += result['processing_time']
-            presidio_time += result['presidio_time']
-            normalization_time += result['normalization_time']
-            
-            if apply_sweeping and 'sweeping_time' in result:
-                sweeping_time += result['sweeping_time']
-                
-            results.append(result)
-            
-        cleaned_df = pd.DataFrame(results)
-        column_renames = {
-            'original_text': 'original_transcript', 
-            'normalized_text': 'normalized_transcript',
-            'presidio_text': 'presidio_transcript',
-            'anonymized_text': 'anonymized_transcript'
-        }
-        
-        if apply_sweeping:
-            column_renames['swept_text'] = 'swept_transcript'
-            
-        cleaned_df.rename(columns=column_renames, inplace=True)
-        
-        final_metrics = _calculate_processing_metrics(
-            cleaned_df, 
-            processing_time, 
-            presidio_time, 
-            normalization_time,
-            sweeping_time if apply_sweeping else 0,
-            apply_sweeping
+        result = process_transcript_with_normalization(
+            text=original_transcript,
+            normalizer=normalizer,
+            presidio_framework=presidio_framework,
+            sweeper=sweeper,
+            apply_sweeping=apply_sweeping,
+            sweep_months=sweep_months,
+            sweep_ordinals=sweep_ordinals,
+            custom_sweeping_dict=custom_sweeping_dict,
+            transcript_row=current_row,
+            field_mapping=field_mapping
         )
         
-        print("\n✅ Processing complete! Final metrics:")
-        # Print all metrics
-        metrics_to_print = list(final_metrics.items())
-        for metric, value in metrics_to_print:
-            print(f" • {metric}: {value}")
+        result[id_column] = row[id_column]
+        processing_time += result['processing_time']
+        presidio_time += result['presidio_time']
+        normalization_time += result['normalization_time']
         
-        return cleaned_df
+        if apply_sweeping and 'sweeping_time' in result:
+            sweeping_time += result['sweeping_time']
+                
+        results.append(result)
+            
+    cleaned_df = pd.DataFrame(results)
+    column_renames = {
+        'original_text': 'original_transcript', 
+        'normalized_text': 'normalized_transcript',
+        'presidio_text': 'presidio_transcript',
+        'anonymized_text': 'anonymized_transcript'
+    }
+    
+    if apply_sweeping:
+        column_renames['swept_text'] = 'swept_transcript'
+            
+    cleaned_df.rename(columns=column_renames, inplace=True)
+        
+    final_metrics = _calculate_processing_metrics(
+        cleaned_df, 
+        processing_time, 
+        presidio_time, 
+        normalization_time,
+        sweeping_time if apply_sweeping else 0,
+        apply_sweeping
+    )
+        
+    print("\n✅ Processing complete! Final metrics:")
+    # Print all metrics
+    metrics_to_print = list(final_metrics.items())
+    for metric, value in metrics_to_print:
+        print(f" • {metric}: {value}")
+        
+    return cleaned_df
         
 def _calculate_processing_metrics(results_df: pd.DataFrame, 
                                     total_processing_time: float,

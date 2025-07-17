@@ -28,9 +28,9 @@ class TextSweeper:
     
     def __init__(self):
         """Initialize the text sweeper with predefined patterns."""
-        # Month names for replacement
+        # Month names for replacement, keep may as it commonly means may or may not
         self.month_names = [
-            'january', 'february', 'march', 'april', 'may', 'june',
+            'january', 'february', 'march', 'april', 'june',
             'july', 'august', 'september', 'october', 'november', 'december',
             'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'
         ]
