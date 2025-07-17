@@ -940,3 +940,116 @@ def create_three_stage_html_table(
                 base_html = base_html[:metrics_end] + original_cell + base_html[metrics_end:]
     
     return base_html 
+
+
+def create_simple_transcript_table(transcript_data: List[Dict], 
+                                 column_names: List[str],
+                                 title: str = "Transcript Analysis",
+                                 description: str = "") -> str:
+    """
+    Create a simple HTML table for displaying multiple transcript versions side by side.
+    
+    Args:
+        transcript_data: List of dictionaries, each containing the transcript columns
+        column_names: List of column names to display (2-4 columns)
+        title: Title for the table
+        description: Optional description text
+        
+    Returns:
+        HTML string for display in notebooks
+        
+    Example:
+        data = [
+            {
+                'original_transcript': 'Hello...',
+                'normalized_transcript': 'Hi...',
+                'anonymized_transcript': '<PERSON>...'
+            }
+        ]
+        columns = ['original_transcript', 'normalized_transcript', 'anonymized_transcript']
+        html = create_simple_transcript_table(data, columns)
+    """
+    if not 2 <= len(column_names) <= 4:
+        raise ValueError("Number of columns must be between 2 and 4")
+        
+    # Calculate column width based on number of columns
+    col_width = int(100 / len(column_names))
+    
+    html_content = f"""
+    <style>
+    .diagnostic-table {{
+        border-collapse: collapse;
+        width: 100%;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        margin: 20px 0;
+    }}
+    
+    .diagnostic-table th {{
+        background-color: #2E86AB;
+        color: white;
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: bold;
+        border: 1px solid #ddd;
+        font-size: 11px;
+    }}
+    
+    .diagnostic-table td {{
+        padding: 10px 8px;
+        border: 1px solid #ddd;
+        vertical-align: top;
+        font-size: 10px;
+        line-height: 1.4;
+    }}
+    
+    .original-col {{ background-color: #fff8dc; }}
+    .normalized-col {{ background-color: #f0f8ff; }}
+    .cleaned-col {{ background-color: #f0fff0; }}
+    .presidio-col {{ background-color: #fff0f5; }}
+    </style>
+    
+    <h3>{title}</h3>
+    <p>{description}</p>
+    
+    <table class="diagnostic-table">
+        <thead>
+            <tr>
+    """
+    
+    # Add column headers
+    for col_name in column_names:
+        display_name = col_name.replace('_', ' ').title()
+        html_content += f'<th style="width: {col_width}%;">{display_name}</th>\n'
+    
+    html_content += """
+            </tr>
+        </thead>
+        <tbody>
+    """
+    
+    # Add data rows
+    for data in transcript_data:
+        html_content += "<tr>\n"
+        for i, col_name in enumerate(column_names):
+            # Determine column style class
+            style_class = ''
+            if 'original' in col_name.lower():
+                style_class = 'original-col'
+            elif 'normal' in col_name.lower():
+                style_class = 'normalized-col'
+            elif 'clean' in col_name.lower() or 'anonym' in col_name.lower():
+                style_class = 'cleaned-col'
+            elif 'presidio' in col_name.lower():
+                style_class = 'presidio-col'
+            
+            # Get column value, default to empty string if not found
+            value = html.escape(str(data.get(col_name, '')))
+            html_content += f'<td class="{style_class}">{value}</td>\n'
+        html_content += "</tr>\n"
+    
+    html_content += """
+        </tbody>
+    </table>
+    """
+    
+    return html_content

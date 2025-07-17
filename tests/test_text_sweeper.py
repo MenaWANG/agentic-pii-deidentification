@@ -91,12 +91,12 @@ class TestTextSweeper:
         """Test that ordinal numbers in word form are replaced."""
         test_text = "The first prize, second place, third spot, and fourth position."
         result = sweeper.sweep_ordinal_numbers(test_text)
-        assert "first" not in result
+        # assert "first" not in result # decide to keep "first" as it may carry other meanings in a setence
         assert "second" not in result
         assert "third" not in result
         assert "fourth" not in result
         assert "<GENERIC_NUMBER>" in result
-        assert result == "The <GENERIC_NUMBER> prize, <GENERIC_NUMBER> place, <GENERIC_NUMBER> spot, and <GENERIC_NUMBER> position."
+        assert result == "The first prize, <GENERIC_NUMBER> place, <GENERIC_NUMBER> spot, and <GENERIC_NUMBER> position."
 
     def test_sweep_ordinal_numbers_compound_words(self, sweeper):
         """Test that compound ordinal words are replaced."""
@@ -328,7 +328,7 @@ class TestTextSweeperIntegration:
         assert "january" not in result
         assert "Feb" not in result
         assert "21st" not in result
-        assert "first" not in result
+        # assert "first" not in result
         assert "3rd" not in result
         assert "15th" not in result
         assert "Sydney" not in result
@@ -386,3 +386,212 @@ class TestTextSweeperIntegration:
         assert "<PERSON> and <PERSON> Smithson" in result
         assert "But <PERSON> should match" in result
         assert "<LOCATION>, Australia" in result
+
+
+@pytest.mark.integration
+class TestTranscriptFieldSweeping:
+    """Test the transcript field-based sweeping functionality."""
+    
+    @pytest.fixture
+    def sweeper(self):
+        """Create a TextSweeper instance for testing."""
+        return TextSweeper()
+    
+    def test_sweep_transcript_fields_basic(self, sweeper):
+        """Test basic transcript field sweeping."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith',
+            'member_mobile': '0412345678'
+        }
+        
+        field_mapping = {
+            '<FIRST_NAME>': ['member_first_name'],
+            '<LAST_NAME>': ['member_last_name'],
+            '<PHONE_NUMBER>': ['member_mobile']
+        }
+        
+        test_text = "Hi, this is John Smith calling from 0412345678"
+        result = sweeper.sweep_transcript_fields(test_text, transcript_row, field_mapping)
+        
+        assert "John" not in result
+        assert "Smith" not in result
+        assert "0412345678" not in result
+        assert "<FIRST_NAME>" in result
+        assert "<LAST_NAME>" in result
+        assert "<PHONE_NUMBER>" in result
+        assert result == "Hi, this is <FIRST_NAME> <LAST_NAME> calling from <PHONE_NUMBER>"
+    
+    def test_sweep_transcript_fields_multiple_fields_per_type(self, sweeper):
+        """Test sweeping with multiple fields mapping to the same placeholder."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith',
+            'agent_first_name': 'Jane',
+            'agent_last_name': 'Doe'
+        }
+        
+        field_mapping = {
+            '<FIRST_NAME>': ['member_first_name', 'agent_first_name'],
+            '<LAST_NAME>': ['member_last_name', 'agent_last_name']
+        }
+        
+        test_text = "Agent Jane Doe speaking with John Smith"
+        result = sweeper.sweep_transcript_fields(test_text, transcript_row, field_mapping)
+        
+        assert "John" not in result
+        assert "Smith" not in result
+        assert "Jane" not in result
+        assert "Doe" not in result
+        assert result == "Agent <FIRST_NAME> <LAST_NAME> speaking with <FIRST_NAME> <LAST_NAME>"
+    
+    def test_sweep_transcript_fields_missing_fields(self, sweeper):
+        """Test handling of missing or empty fields in transcript data."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': '',  # Empty field
+            'member_mobile': None    # None value
+        }
+        
+        field_mapping = {
+            '<PERSON>': ['member_first_name', 'member_last_name'],
+            '<PHONE_NUMBER>': ['member_mobile']
+        }
+        
+        test_text = "Hi, this is John calling"
+        result = sweeper.sweep_transcript_fields(test_text, transcript_row, field_mapping)
+        
+        assert "John" not in result
+        assert result == "Hi, this is <PERSON> calling"
+    
+    def test_sweep_transcript_fields_case_insensitive(self, sweeper):
+        """Test case-insensitive field value matching."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith'
+        }
+        
+        field_mapping = {
+            '<PERSON>': ['member_first_name', 'member_last_name']
+        }
+        
+        test_text = "This is JOHN SMITH and john smith"
+        result = sweeper.sweep_transcript_fields(test_text, transcript_row, field_mapping)
+        
+        assert "JOHN" not in result
+        assert "SMITH" not in result
+        assert "john" not in result
+        assert "smith" not in result
+        assert result == "This is <PERSON> <PERSON> and <PERSON> <PERSON>"
+    
+    def test_sweep_transcript_fields_empty_inputs(self, sweeper):
+        """Test handling of empty or invalid inputs."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith'
+        }
+        
+        field_mapping = {
+            '<PERSON>': ['member_first_name', 'member_last_name']
+        }
+        
+        # Empty text
+        assert sweeper.sweep_transcript_fields("", transcript_row, field_mapping) == ""
+        
+        # None text
+        assert sweeper.sweep_transcript_fields(None, transcript_row, field_mapping) is None
+        
+        # Empty transcript row
+        assert sweeper.sweep_transcript_fields("Hi John", {}, field_mapping) == "Hi John"
+        
+        # Empty field mapping
+        assert sweeper.sweep_transcript_fields("Hi John", transcript_row, {}) == "Hi John"
+        
+        # None inputs
+        assert sweeper.sweep_transcript_fields("Hi John", None, field_mapping) == "Hi John"
+        assert sweeper.sweep_transcript_fields("Hi John", transcript_row, None) == "Hi John"
+    
+    def test_sweep_text_with_transcript_fields(self, sweeper):
+        """Test integration of transcript field sweeping with other sweeping features."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith',
+            'member_mobile': '0412345678'
+        }
+        
+        field_mapping = {
+            '<FIRST_NAME>': ['member_first_name'],
+            '<LAST_NAME>': ['member_last_name'],
+            '<PHONE_NUMBER>': ['member_mobile']
+        }
+        
+        test_text = "John Smith called on January 21st from 0412345678"
+        
+        # Test with all features enabled
+        result = sweeper.sweep_text(
+            text=test_text,
+            sweep_months=True,
+            sweep_ordinals=True,
+            transcript_row=transcript_row,
+            field_mapping=field_mapping
+        )
+        
+        assert "John" not in result
+        assert "Smith" not in result
+        assert "January" not in result
+        assert "21st" not in result
+        assert "0412345678" not in result
+        assert "<FIRST_NAME>" in result
+        assert "<LAST_NAME>" in result
+        assert "<MONTH>" in result
+        assert "<GENERIC_NUMBER>" in result
+        assert "<PHONE_NUMBER>" in result
+        assert result == "<FIRST_NAME> <LAST_NAME> called on <MONTH> <GENERIC_NUMBER> from <PHONE_NUMBER>"
+        
+        # Test with selective features
+        result_partial = sweeper.sweep_text(
+            text=test_text,
+            sweep_months=False,
+            sweep_ordinals=False,
+            transcript_row=transcript_row,
+            field_mapping=field_mapping
+        )
+        
+        assert "John" not in result_partial
+        assert "Smith" not in result_partial
+        assert "January" in result_partial  # Month not swept
+        assert "21st" in result_partial     # Ordinal not swept
+        assert "0412345678" not in result_partial
+        assert result_partial == "<FIRST_NAME> <LAST_NAME> called on January 21st from <PHONE_NUMBER>"
+    
+    def test_sweep_text_convenience_function(self):
+        """Test the convenience function with transcript field sweeping."""
+        transcript_row = {
+            'member_first_name': 'John',
+            'member_last_name': 'Smith'
+        }
+        
+        field_mapping = {
+            '<FIRST_NAME>': ['member_first_name'],
+            '<LAST_NAME>': ['member_last_name']
+        }
+        
+        test_text = "Call from John Smith on January 1st"
+        
+        result = sweep_text(
+            text=test_text,
+            sweep_months=True,
+            sweep_ordinals=True,
+            transcript_row=transcript_row,
+            field_mapping=field_mapping
+        )
+        
+        assert "John" not in result
+        assert "Smith" not in result
+        assert "January" not in result
+        assert "1st" not in result
+        assert "<FIRST_NAME>" in result
+        assert "<LAST_NAME>" in result
+        assert "<MONTH>" in result
+        assert "<GENERIC_NUMBER>" in result
+        assert result == "Call from <FIRST_NAME> <LAST_NAME> on <MONTH> <GENERIC_NUMBER>"

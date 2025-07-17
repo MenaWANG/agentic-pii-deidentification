@@ -7,6 +7,7 @@ for specific types of information that should be consistently masked.
 This layer focuses on:
 1. Calendar information (months, dates, ordinal numbers)
 2. Custom dictionary-based entity replacement
+3. Transcript field-based PII sweeping
 """
 
 import re
@@ -27,9 +28,9 @@ class TextSweeper:
     
     def __init__(self):
         """Initialize the text sweeper with predefined patterns."""
-        # Month names for replacement
+        # Month names for replacement, keep may as it commonly means may or may not
         self.month_names = [
-            'january', 'february', 'march', 'april', 'may', 'june',
+            'january', 'february', 'march', 'april', 'june',
             'july', 'august', 'september', 'october', 'november', 'december',
             'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'
         ]
@@ -37,7 +38,7 @@ class TextSweeper:
         # Ordinal suffixes and patterns
         self.ordinal_suffixes = ['st', 'nd', 'rd', 'th']
         self.ordinal_word_patterns = [
-            'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth',
+            'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth',
             'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 
             'eighteenth', 'nineteenth', 'twentieth', 'twenty-first', 'twenty-second', 'twenty-third', 
             'twenty-fourth', 'twenty-fifth', 'twenty-sixth', 'twenty-seventh', 'twenty-eighth', 
@@ -170,10 +171,60 @@ class TextSweeper:
         """
         self.replacement_dict = entity_dict
     
+    def sweep_transcript_fields(self, text: str, transcript_row: dict, field_mapping: Dict[str, List[str]]) -> str:
+        """
+        Replace PII in text based on transcript field values.
+        
+        This method uses values from specific fields in the transcript data to sweep PII.
+        For example, if field_mapping is {'<PERSON>': ['member_first_name', 'member_last_name']},
+        it will use the values from those fields to replace matching text with '<PERSON>'.
+        
+        Args:
+            text: Input text to sweep
+            transcript_row: Dictionary containing the transcript data fields
+            field_mapping: Dictionary mapping PII placeholders to lists of field names
+                         e.g. {'<PERSON>': ['member_first_name', 'member_last_name'],
+                              '<PHONE_NUMBER>': ['member_mobile', 'member_landline']}
+            
+        Returns:
+            Text with PII from transcript fields replaced
+        """
+        if not text or not isinstance(text, str):
+            return text
+            
+        if not transcript_row or not field_mapping:
+            return text
+            
+        result = text
+        
+        # Create a temporary entity dictionary for the current transcript
+        temp_entity_dict = {}
+        
+        # Build replacement lists from transcript fields
+        for placeholder, field_list in field_mapping.items():
+            values = []
+            for field in field_list:
+                if field in transcript_row and transcript_row[field]:
+                    # Add the field value if it exists and is not empty
+                    field_value = str(transcript_row[field]).strip()
+                    if field_value:
+                        values.append(field_value)
+            
+            if values:
+                temp_entity_dict[placeholder] = values
+        
+        # Use the existing sweep_custom_entities method with our temporary dictionary
+        if temp_entity_dict:
+            result = self.sweep_custom_entities(result, temp_entity_dict)
+            
+        return result
+    
     def sweep_text(self, text: str, 
                   sweep_months: bool = True, 
                   sweep_ordinals: bool = True,
-                  custom_dict: Optional[Dict[str, List[str]]] = None) -> str:
+                  custom_dict: Optional[Dict[str, List[str]]] = None,
+                  transcript_row: Optional[dict] = None,
+                  field_mapping: Optional[Dict[str, List[str]]] = None) -> str:
         """
         Apply all sweeping rules to the input text.
         
@@ -182,6 +233,8 @@ class TextSweeper:
             sweep_months: Whether to replace month names
             sweep_ordinals: Whether to replace ordinal numbers
             custom_dict: Custom entity replacement dictionary
+            transcript_row: Optional transcript data for field-based sweeping
+            field_mapping: Optional mapping of PII placeholders to transcript field names
             
         Returns:
             Swept text with all selected rules applied
@@ -199,7 +252,11 @@ class TextSweeper:
         if sweep_ordinals:
             result = self.sweep_ordinal_numbers(result)
         
-        # Step 3: Apply custom entity replacements if provided
+        # Step 3: Apply transcript field-based sweeping if provided
+        if transcript_row is not None and field_mapping is not None:
+            result = self.sweep_transcript_fields(result, transcript_row, field_mapping)
+        
+        # Step 4: Apply custom entity replacements if provided
         if custom_dict is not None:
             # Temporarily set the replacement dictionary
             original_dict = self.replacement_dict
@@ -219,7 +276,9 @@ class TextSweeper:
 def sweep_text(text: str,
               sweep_months: bool = True,
               sweep_ordinals: bool = True,
-              custom_dict: Optional[Dict[str, List[str]]] = None) -> str:
+              custom_dict: Optional[Dict[str, List[str]]] = None,
+              transcript_row: Optional[dict] = None,
+              field_mapping: Optional[Dict[str, List[str]]] = None) -> str:
     """
     Convenience function to sweep text using default sweeper.
     
@@ -228,12 +287,15 @@ def sweep_text(text: str,
         sweep_months: Whether to replace month names
         sweep_ordinals: Whether to replace ordinal numbers
         custom_dict: Custom entity replacement dictionary
+        transcript_row: Optional transcript data for field-based sweeping
+        field_mapping: Optional mapping of PII placeholders to transcript field names
         
     Returns:
         Swept text
     """
     sweeper = TextSweeper()
-    return sweeper.sweep_text(text, sweep_months, sweep_ordinals, custom_dict)
+    return sweeper.sweep_text(text, sweep_months, sweep_ordinals, custom_dict, 
+                            transcript_row, field_mapping)
 
 
 def sweep_months(text: str, replacement: str = '<MONTH>') -> str:
