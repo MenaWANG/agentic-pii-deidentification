@@ -16,6 +16,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class TextNormaliser:
