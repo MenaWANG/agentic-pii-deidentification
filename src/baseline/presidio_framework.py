@@ -16,6 +16,7 @@ from presidio_analyzer.recognizer_registry import RecognizerRegistry
 from presidio_analyzer.pattern_recognizer import PatternRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
+import logging
 
 try:
     import mlflow
@@ -33,6 +34,7 @@ class PurePresidioFramework:
     
     def __init__(self, enable_mlflow: bool = True):
         """Initialize the Presidio Framework with custom recognizers."""
+        logging.getLogger('presidio-analyzer').setLevel(logging.ERROR)
         self.enable_mlflow = enable_mlflow and MLFLOW_AVAILABLE
         
         # Initialize Presidio engines with custom recognizers
