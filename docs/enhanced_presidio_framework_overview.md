@@ -52,18 +52,19 @@ The Sweeping Layer plays the role of a safety net at last to apply targeted patt
 - **Ordinal Number Handling**: Replaces ordinal numbers (1st, 2nd, third, fourth) with generic placeholders
   - Example: "My date of birth is 15th of January, 1981" → "My date of birth is `<GENERIC_NUMBER>` of `<MONTH>`, `<GENERIC_NUMBER>`"
 - **Custom Entity Dictionary**: Supports customized replacement lists for all known PII entities
-  - An additional cleaning layer to ensure we replace all known PII in our customer data with generic placeholders 
+  - An additional cleaning layer to ensure we replace all known PII in our customer data with generic placeholders, if they haven't been masked already by the previous layers. 
   - Example: "Contact Lucy Smith at lucy.smith@gmail.com" → "Contact `<PERSON>`  at  `<EMAIL>`"
 
 ## Security and Compliance Benefits
 
 Our multi-layer approach offers several key advantages for meeting security and compliance requirements:
 
-1. **Defense in Depth**: Multiple processing layers create redundancy, ensuring PII that might be missed by one layer is caught by another
-2. **Comprehensive Coverage**: Handles both standard PII entities and customized identifiers
-3. **Format Resilience**: Effectively processes unstructured data regardless of how information is expressed (digits, spelled-out letters)
-4. **Auditable Process**: Each layer's operation is tested, tracked, timed, and logged for complete transparency
-5. **Configurable Security**: Framework can be adjusted based on specific compliance needs or risk tolerance
+- **Defense in Depth**: Multiple processing layers create redundancy, ensuring PII that might be missed by one layer is caught by another.
+- **Data Sovereignty**: All the components within this framework run within one's own environment, which means one can maintain complete control over the data throughout the entire process.
+- **Auditable Process**: Each layer's operation is tested, tracked, timed, and logged for complete transparency.
+- **Comprehensive Coverage**: Handles both standard PII entities and customized identifiers.
+- **Format Resilience**: Effectively processes unstructured data regardless of how information is expressed (digits, spelled-out letters).
+- **Configurable Security**: Framework can be adjusted based on specific compliance needs or risk tolerance.
 
 ## Implementation Status
 
