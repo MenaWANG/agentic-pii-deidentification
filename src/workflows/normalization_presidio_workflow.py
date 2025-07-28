@@ -293,17 +293,20 @@ def _calculate_processing_metrics(results_df: pd.DataFrame,
         'total_transcripts': num_transcripts,
         'total_pii_detected': results_df['pii_count'].sum(),
         'avg_pii_per_transcript': round(results_df['pii_count'].mean(), 2),
+        'workflow_stages': 'Normalization + Presidio + Sweeping' if sweeping_applied else 'Normalization + Presidio',
         'total_processing_time_seconds': round(total_processing_time, 4),
         'presidio_processing_time_seconds': round(presidio_time, 4),
         'normalization_processing_time_seconds': round(normalization_time, 4),
-        'workflow_stages': 'Normalization + Presidio + Sweeping' if sweeping_applied else 'Normalization + Presidio',
-        'avg_processing_time_per_transcript_seconds': round(avg_time_per_transcript, 4),
-        'estimated_time_for_1m_transcripts': time_1m_estimate
     }
-    
-    # Add sweeping metrics if applicable
+
+    # Add sweeping metrics if applicable, and insert in correct order
     if sweeping_applied:
         metrics['sweeping_processing_time_seconds'] = round(sweeping_time, 4)
-        metrics['sweeping_percentage_of_total'] = round((sweeping_time / total_processing_time) * 100, 2) if total_processing_time > 0 else 0
+
+    # Continue adding the rest of the metrics
+    metrics.update({
+        'avg_processing_time_per_transcript_seconds': round(avg_time_per_transcript, 4),
+        'estimated_time_for_1m_transcripts': time_1m_estimate
+    })
     
     return metrics     
